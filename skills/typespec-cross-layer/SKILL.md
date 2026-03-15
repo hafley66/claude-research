@@ -113,14 +113,30 @@ model CreateRequest {
 model User {
   @visibility("read")
   id: uuid;
-  
+
   @visibility("create", "update")
   name: string;
-  
+
   @visibility("read", "create")
   email: string;
 }
 ```
+
+### Function-based type transforms (1.10+, preferred over mutative decorators)
+```tsp
+// Functions create new types without mutation, preserving decorator metadata
+extern fn applyVisibility(input: Model, filter: valueof VisibilityFilter): Model;
+
+const READ_FILTER: VisibilityFilter = #{ any: #[Public] };
+
+// Template wrapper for caching (functions never cache)
+alias ReadView<M extends Model> = applyVisibility(M, READ_FILTER);
+
+alias UserRead = ReadView<User>;
+alias UserCreate = FilterVisibility<User, #{ any: #[Lifecycle.Create] }>;
+```
+
+See **typespec-functions** skill for implementing custom transform functions with JS backends.
 
 ### Custom emitter logic (patch semantics)
 ```typescript

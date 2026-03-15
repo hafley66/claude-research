@@ -202,6 +202,12 @@ For Rust: no @alloy-js/rust package exists yet. Options:
 - Use `<ay.SourceFile>` with raw string templates for Rust syntax
 - Use Azure/typespec-rust as reference (66.5% Rust, 21.3% TypeScript)
 
+## Functions in the type graph (1.10+)
+
+Functions declared with `extern fn` appear as `functionDeclarations` on Namespace nodes. Emitters can visit them via the semantic walker. Functions produce types/values at check-time, so by the time an emitter runs, function call results are already resolved in the type graph. No special emitter handling is needed for function results -- they appear as regular types.
+
+See **typespec-functions** skill for the full function declaration and implementation pattern.
+
 ## Known limitations and feedback (from issue #2729)
 - Context management is unclear beyond basic scoping examples
 - Default do-nothing implementations obscure required method overrides

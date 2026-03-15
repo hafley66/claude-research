@@ -9,6 +9,7 @@ metadata:
 ---
 ## Related skills
 - **typespec-emitter-framework**: The newer Alloy/JSX-based approach (declarative, composable)
+- **typespec-functions**: Functions (1.10+) use `$functions` export (not `$onEmit`); see that skill for implementing function backends
 - **alloy-core**: Underlying code generation framework
 - **alloy-languages**: Language-specific Alloy components
 
@@ -201,6 +202,19 @@ options:
     model-prefix: "M_"
     table-format: "markdown"
 ```
+
+### Visiting function declarations (1.10+)
+```typescript
+// Functions appear as functionDeclarations on a Namespace
+navigateProgram(program, {
+  model: (model) => emitModel(model, emitterOutputDir),
+  enum: (e) => emitEnum(e, emitterOutputDir),
+  // The semantic walker visits FunctionValue declarations
+  functionDeclaration: (fn) => emitFunctionDeclaration(fn, emitterOutputDir),
+});
+```
+
+Note: emitter `$onEmit` and function `$functions` are separate exports. Emitters produce output files; functions compute types/values at check-time. See **typespec-functions** skill for the `$functions` implementation pattern.
 
 ### Type traversal utilities
 ```typescript

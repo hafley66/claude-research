@@ -296,6 +296,21 @@ function emitInputOutput(model: Model, outputDir: string) {
 - HTTP method type mapping
 - Patch semantics (optional + nullable)
 
+## Functions replacing mutative decorators (1.10+)
+
+As of TypeSpec 1.10, mutative decorators like `@withVisibilityFilter` and `@applyMergePatch` are deprecated in favor of function-based transforms. Functions create new type instances without mutating existing ones and preserve decorator metadata that mutative decorators could not.
+
+```tsp
+// Old (deprecated): mutative decorator
+@withVisibilityFilter(#{ any: #[Lifecycle.Read] })
+model UserRead { ... }
+
+// New: function-based transform via FilterVisibility template
+alias UserRead = FilterVisibility<User, #{ any: #[Lifecycle.Read] }>;
+```
+
+The `FilterVisibility` template wraps an internal function and caches results per unique input. See **typespec-functions** skill for creating custom function-based transforms.
+
 ## Verification
 - Run `tsp compile` to verify visibility decorators
 - Check input types exclude read-only fields

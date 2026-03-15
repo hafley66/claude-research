@@ -12,6 +12,7 @@ metadata:
 - Use decorators (@doc, @summary, @pattern, @minValue, @maxValue, @key, @secret)
 - Organize code with namespaces and imports
 - Create reusable templates with type parameters
+- Declare functions with `extern fn` for type transforms and value computation (1.10+)
 - Apply visibility modifiers (read, update, create, delete)
 - Use standard library types (string, int32, int64, float64, boolean, utcDateTime, uuid)
 
@@ -77,6 +78,20 @@ model PaginatedResponse<T> {
 
 op listPets(): PaginatedResponse<Pet>;
 ```
+
+### Functions (1.10+, experimental)
+```tsp
+// Functions compute and return types or values (unlike decorators which only attach metadata)
+extern fn transformModel(input: Model): Model;
+extern fn computeDefault(fieldType: string): valueof unknown;
+
+// Call in aliases or default values
+alias Transformed = transformModel(MyModel);
+model Config {
+  timeout: int32 = computeDefault("timeout");
+}
+```
+See **typespec-functions** skill for full coverage of function declarations, JS implementation, function types, and higher-order patterns.
 
 ### Decorators
 ```tsp

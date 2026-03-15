@@ -229,6 +229,34 @@ interface Pets is Resource<Pet>;
 - is/extends template relationships
 - Nested/multi-parameter templates
 
+## Templates vs functions (1.10+)
+
+Templates **cache** their instances: same args always return the same type. Functions **never cache** results: each call runs the JS implementation.
+
+Use a template alias to wrap function calls when you want caching:
+```tsp
+extern fn applyVisibility(input: Model, visibility: valueof VisibilityFilter): Model;
+
+const READ_FILTER: VisibilityFilter = #{ any: #[Public] };
+
+// Template caches the result per unique M. Without this wrapper,
+// every call to applyVisibility would re-run the JS function.
+alias Read<M extends Model> = applyVisibility(M, READ_FILTER);
+```
+
+Template parameters can also accept function values:
+```tsp
+model MyTemplate<
+  Props extends Reflection.Model,
+  MakeId extends valueof fn(props: Reflection.Model) => valueof string = makeIdDefault
+> {
+  id: string = MakeId(Props);
+  ...Props;
+}
+```
+
+See **typespec-functions** skill for full function coverage.
+
 ## Verification
 - Run `tsp compile` to verify template resolution
 - Check template mapper in JS API

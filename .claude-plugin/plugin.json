@@ -1,0 +1,9 @@
+{
+  "name": "hafley",
+  "version": "0.1.0",
+  "description": "Hafley's skill collection — research, code analysis, API design, and book authoring tools",
+  "author": {
+    "name": "Chris Hafley"
+  },
+  "license": "MIT"
+}

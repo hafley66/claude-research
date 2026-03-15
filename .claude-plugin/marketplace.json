@@ -1,0 +1,13 @@
+{
+  "name": "hafley-marketplace",
+  "owner": {
+    "name": "Chris Hafley"
+  },
+  "plugins": [
+    {
+      "name": "hafley",
+      "source": "./",
+      "description": "Hafley's skill collection — research, code analysis, API design, and book authoring tools"
+    }
+  ]
+}

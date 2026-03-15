@@ -1,1 +1,1 @@
-chat_log/20260314_223532_hafley-plugin-setup.md
+20260315.0.plugin-commands-and-tooling.md

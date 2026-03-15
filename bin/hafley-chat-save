@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage: hafley-chat-save <topic-kebab-case> <<'EOF'
+# markdown content
+# EOF
+#
+# Reads markdown from stdin, writes to chat_log/YYYYMMDD.INDEX.TOPIC.md
+# Updates chat_log/LATEST.md with the filename.
+
+TOPIC="${1:?Usage: hafley-chat-save <topic-kebab-case>}"
+TODAY=$(date +%Y%m%d)
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+LOG_DIR="$REPO_ROOT/chat_log"
+
+mkdir -p "$LOG_DIR"
+
+# Count existing files for today to get index
+shopt -s nullglob
+FILES=("$LOG_DIR"/"$TODAY".*.md)
+INDEX=${#FILES[@]}
+
+FILENAME="$TODAY.$INDEX.$TOPIC.md"
+FILEPATH="$LOG_DIR/$FILENAME"
+
+# Read stdin into file
+cat > "$FILEPATH"
+
+# Update LATEST
+echo "$FILENAME" > "$LOG_DIR/LATEST.md"
+
+echo "$FILENAME"

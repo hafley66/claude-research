@@ -8,10 +8,9 @@ allowed-tools: Read, Glob
 
 Resume work from a saved session.
 
-## Available Sessions
-! `ls -t chat_log/*.md | grep -v LATEST.md | head -10`
-
 ## Instructions
+
+First, Glob `chat_log/*.md` to see available sessions (excluding LATEST.md).
 
 1. If `$ARGUMENTS` is provided:
    - If it's a number, load the Nth most recent file (excluding LATEST.md)

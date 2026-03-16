@@ -11,6 +11,25 @@ metadata:
 
 Using `egui_overlay` to create transparent, borderless, always-on-top windows that render arbitrary egui content. This crate solves the hard platform-specific problems (transparency compositing, click-through, window level) that raw winit leaves as exercises.
 
+## wgpu transparency on macOS
+
+`egui_overlay::start()` sets wgpu surface alpha mode to `Auto`, which resolves to `Opaque` on macOS. To get actual transparency you must inline `start()` and set:
+
+```rust
+// In WgpuConfig / surface config
+surface_config.alpha_mode = wgpu::CompositeAlphaMode::PostMultiplied;
+// PreMultiplied is not in the supported list on macOS Metal ("not in the list of supported alpha modes: [Opaque, PostMultiplied]")
+```
+
+Also set egui visuals to transparent:
+
+```rust
+let mut visuals = egui::Visuals::dark();
+visuals.window_fill = egui::Color32::TRANSPARENT;
+visuals.panel_fill = egui::Color32::TRANSPARENT;
+ctx.set_visuals(visuals);
+```
+
 ## Crate
 
 ```toml
@@ -77,8 +96,12 @@ To make the entire window click-through (pure HUD, no interaction):
 
 ```rust
 fn gui_run(&mut self, ctx: &egui::Context, _gfx: &mut ThreeDBackend, glfw: &mut GlfwBackend) {
-    // Force passthrough on the entire window
-    glfw.window.set_mouse_passthrough(true);
+    // Must be called every frame -- it does not persist
+    glfw_backend.set_passthrough(true);
+
+    // Use layer_painter with explicit set_clip_rect to prevent egui clipping
+    let painter = ctx.layer_painter(egui::LayerId::background());
+    painter.set_clip_rect(ctx.screen_rect());
 
     // Render read-only content
     egui::CentralPanel::default()
@@ -88,6 +111,8 @@ fn gui_run(&mut self, ctx: &egui::Context, _gfx: &mut ThreeDBackend, glfw: &mut 
         });
 }
 ```
+
+Note: using `Area` widgets instead of `layer_painter` causes egui to paint background rects, breaking transparency.
 
 ## Multiple overlay windows
 
@@ -136,6 +161,7 @@ impl EguiOverlay for PaneOverlay {
 - Window level: `NSWindow.setLevel(.floating)` is handled by egui_overlay.
 - Spaces: overlay windows follow the active Space by default.
 - Retina: egui handles scale factor internally via `pixels_per_point`.
+- **Retina framebuffer overflow**: wgpu defaults `max_texture_dimension_2d` to 2048. Retina displays create framebuffers at 2x logical resolution (e.g. 3420x2214 for a 1710x1107 logical window). Set `device_descriptor.required_limits.max_texture_dimension_2d = 8192` in `WgpuConfig`. Metal supports up to 16384. `GLFW ScaleToMonitor` has no effect on macOS -- the window server controls backing store resolution.
 
 ### Linux X11
 - Uses three-d/OpenGL backend.

@@ -11,6 +11,10 @@ metadata:
 
 Getting the absolute screen-pixel position and size of the terminal emulator window. Required to convert tmux cell coordinates (relative to the terminal) into absolute screen coordinates (where to place overlay windows).
 
+## Getting frontmost app PID on macOS
+
+Use `CGWindowListCopyWindowInfo` with `kCGWindowListOptionOnScreenOnly`, iterate windows, find the first layer-0 window, read `kCGWindowOwnerPID`. Do not use `lsappinfo` -- it is unreliable. Do not use `AXUIElementCreateSystemWide` from a process that runs a `CGEventTap`: it returns -25204 (timeout) on every call, even from separate threads. Use `AXUIElementCreateApplication(pid)` instead, with the PID obtained from the window list.
+
 ## macOS: CGWindowListCopyWindowInfo
 
 The most reliable macOS approach. No accessibility permissions needed.
@@ -114,6 +118,8 @@ fn get_window_position_a11y(pid: i32) -> Option<(i32, i32, u32, u32)> {
 ```
 
 **Tradeoff**: More accurate but users must grant permission in System Settings > Privacy > Accessibility. CGWindowList needs no permissions.
+
+**AX call safety**: `AXUIElementCopyAttributeValue` and related calls can throw NSExceptions that Rust cannot catch (fatal: "Rust cannot catch foreign exceptions"). Wrap every AX call in an ObjC `@try/@catch` trampoline (`ax_safe.m`, compiled via the `cc` crate in `build.rs`). Also wrap CFArray iteration on AX results -- stale AX refs in arrays also throw. Set `AXUIElementSetMessagingTimeout` to 0.25-0.5s to get error codes instead of 6-second hangs.
 
 ## Linux X11: xdotool
 

@@ -14,13 +14,18 @@ allowed-tools: Bash(git *)
 ```
 <short summary line>
 
+<what changed and why -- plain factual description of the diff, no attribution>
+
 Directed by: <what the human decided, requested, or designed>
-Implemented by: Claude — <what was coded, configured, or wired up>
+Implemented by: Claude -- <what was coded, configured, or wired up>
 
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 ```
 
-The "Directed by" line captures the human's contribution -- their ideas, decisions, corrections, design calls. The "Implemented by" line captures what the AI actually did to execute.
+Three layers, in order:
+- **Facts**: what the diff does and why, readable by anyone with no context on who did what
+- **Human**: the decisions, design calls, corrections, and direction the human provided
+- **AI**: what Claude actually executed to implement those decisions
 
 4. Commit:
 ```

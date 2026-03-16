@@ -17,6 +17,8 @@ Show structure, containment, flow, boundaries, counts. Collapse details where a 
 
 - Shape matches topology. A tree is fine when it's a tree. A flow is fine when it's a flow. Don't default to one shape.
 - Avoid generic output. If it looks like something `tree` would print, it's too boring. Find the interesting structure.
+- Don't always flow top-down or left-to-right. Things can nest, wrap around, meet in the middle, radiate outward. Let the spatial relationships in the diagram reflect the actual relationships in the system.
+- When the user asks for avant garde: think HUD overlays, tactical readouts, AC3 garage screens, NERV system diagrams, Ghost in the Shell net-dive visualizations. Dense, layered, asymmetric. Information as architecture.
 - One screen max. One visual gulp.
 
 ### Purpose

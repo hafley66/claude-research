@@ -10,16 +10,12 @@ Resume work from a saved session.
 
 ## Instructions
 
-First, Glob `chat_log/*.md` to see available sessions (excluding LATEST.md).
-
 1. If `$ARGUMENTS` is provided:
-   - If it's a number, load the Nth most recent file (excluding LATEST.md)
-   - If it's a filename, load that file from `chat_log/`
-   - If it's a partial match, find the best match
+   - If it's a filename, read `chat_log/$ARGUMENTS.md` directly
+   - If it's a partial match, Glob `chat_log/*$ARGUMENTS*.md` to find it
 
 2. If no argument:
-   - Read `chat_log/LATEST.md` to get the filename of the most recent session
-   - Then load that file
+   - Read `chat_log/LATEST.md` directly
 
 3. Read the session file and internalize:
    - **Goal**: What we're working on

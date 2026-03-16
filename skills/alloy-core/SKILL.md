@@ -227,6 +227,84 @@ const body = code`
 `;
 ```
 
+## Reusable component patterns
+
+### VisibilityContext (declaration-level modifier via context)
+
+Use when a modifier (e.g. `pub`) should default ON in codegen output but allow per-component override:
+
+```tsx
+const VisibilityContext = createContext<string | undefined>();
+
+// Hook: true → "pub ", false → "", undefined → defer to context
+function useVisibility(prop?: boolean) {
+  const ctx = useContext(VisibilityContext);
+  if (prop === true) return "pub ";
+  if (prop === false) return "";
+  return ctx ?? "";
+}
+
+// Emitter wraps the tree to set default
+<VisibilityContext.Provider value="pub">
+  <RustModule />
+</VisibilityContext.Provider>
+
+// Component uses it
+function StructDeclaration(props: { pub?: boolean }) {
+  const vis = useVisibility(props.pub);
+  return <>{vis}struct ...</>;
+}
+```
+
+Generalizes to any declaration-level modifier that should default differently in codegen vs inline component usage.
+
+### AppendZone (teleport / deferred collection pattern)
+
+Named zones backed by `shallowReactive` arrays. Child components anywhere in the tree append content; the zone renders it at a defined location. Same reactive pattern as scope sets.
+
+```tsx
+// Setup
+const zones = createZones(); // returns { ZoneProvider, Zone, AppendTo }
+
+// Root
+<ZoneProvider>
+  <Zone name="routes" />       {/* renders here */}
+  <Handlers />
+</ZoneProvider>
+
+// Anywhere in the tree
+function Handler({ route }) {
+  return <AppendTo zone="routes">{route.path}</AppendTo>;
+}
+```
+
+Use for: router route tables, match arm dispatch tables, import collection, any "gather from children, render at top" pattern.
+
+### CodegenPair (auto/manual file split)
+
+Generic primitive for split-file codegen: `_auto.rs` is regenerated on every run, `.rs` is stubbed once (user-owned).
+
+```tsx
+// Context provides implPath so children can reference it
+function CodegenPair({ name, children }) {
+  const implPath = `${name}.rs`;
+  return (
+    <CodegenPairContext.Provider value={{ implPath }}>
+      <AutoFile name={name}>{children}</AutoFile>
+      <StubFile name={name} />
+    </CodegenPairContext.Provider>
+  );
+}
+
+// ImplCall renders a delegation call using implPath from context
+function ImplCall({ sig }) {
+  const { implPath } = useContext(CodegenPairContext);
+  return <>{sig}; // impl in {implPath}</>;
+}
+```
+
+Protocol-agnostic: HTTP `Endpoint`, gRPC handlers, CLI commands, event handlers all use the same primitive. `AutoFile` regenerates; `StubFile` is skipped if the file already exists.
+
 ## Built-in components
 
 | Component | Purpose |

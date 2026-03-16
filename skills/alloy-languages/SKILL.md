@@ -297,11 +297,17 @@ Things learned from reading the Alloy core and language package source that crea
 
 **Scope hierarchy doesn't model Rust's module = file convention.** In Rust, `mod foo;` declares a module that corresponds to a file (`foo.rs` or `foo/mod.rs`). The scope tree and the file tree are the same thing. In TS/Go, scopes and files are somewhat independent. A Rust `SourceFile` component would need to simultaneously create a file AND a module scope, and `mod` declarations inside files would need to create either inline scopes or new files.
 
-**Visibility: default pub.** Rust has scope-relative visibility (`pub(crate)`, `pub(super)`, `pub(in path)`) but for codegen purposes, default everything to `pub`. If finer control is needed later, add a visibility context that symbols read from. Not worth modeling up front.
+**Visibility: default pub.** Rust has scope-relative visibility (`pub(crate)`, `pub(super)`, `pub(in path)`) but for codegen purposes, default everything to `pub`. Implement as a `VisibilityContext` (see alloy-core skill) -- emitter wraps the tree with `value="pub"`, components call `useVisibility(props.pub)`. This lets individual components opt out without prop drilling.
 
 **Lifetimes have no analog in other packages.** Lifetime parameters (`'a`) on structs, functions, impl blocks, and trait bounds are unique to Rust. They participate in type expressions (`&'a str`) and generic bounds (`where T: 'a + Clone`). No existing Alloy component or symbol concept handles this. Needs new components and likely a lifetime-tracking context.
 
 **Name conflict resolution doesn't apply.** TS resolves conflicts by appending numbers (`User`, `User1`). Rust forbids name conflicts in the same scope entirely. The `nameConflictResolver` on the binder should probably emit a diagnostic error for Rust instead of renaming.
+
+**Rust module collision: can't have `foo.rs` and `foo/` in the same directory.** When an endpoint or module has sub-endpoints, the file and its directory cannot share a name. Use distinct base names instead of the Rust `mod.rs` convention -- e.g. `list_users.rs` + `list_users_auto.rs` rather than `users.rs` + `users/mod.rs`. The CodegenPair pattern (see alloy-core skill) naturally avoids this because `AutoFile` and `StubFile` use different suffixes on the same base name.
+
+**Serde attributes: no rename.** `SerdeContainerConfig` and `SerdeFieldConfig` convert to `#[serde(...)]` attr strings but do NOT support rename or renameAll. Names pass through verbatim from the input schema. Container options: `tag`, `content`, `untagged`, `denyUnknownFields`, `default`, `transparent`. Field options: `skip`, `skipSerializing`, `skipDeserializing`, `skipSerializingIf`, `default`, `flatten`, `with`, `alias`.
+
+**Colocated model placement.** Models live as deep as possible in the file tree, collocated with the code that primarily owns them. Hoist to the common ancestor only when a model is referenced across module boundaries. No separate `models/` folder. Alloy's refkey system resolves `use crate::` paths regardless of file location.
 
 **Formatting: ignore prettier, use rustfmt.** Alloy's formatting intrinsics (group, indent, hardline) use prettier doc IR under the hood. Do not fight this for Rust output. Emit syntactically valid Rust without caring about style, pipe through `rustfmt` as a post-processing step. Do not invest time in getting Alloy's formatting to match Rust conventions.
 

@@ -304,6 +304,7 @@ kill %1
 
 ## Known issues
 
+- **macOS transparency requires NSWindow config**: When testing transparent overlay windows on macOS, wgpu's `CompositeAlphaMode` alone is not enough. The NSWindow must have `setOpaque(false)` and `setBackgroundColor(clearColor)` set via objc2-app-kit. See `egui-overlay-windows` skill for the full three-layer transparency stack.
 - **Retina max texture dimension**: wgpu defaults `max_texture_dimension_2d` to 2048. On Retina displays the backing framebuffer is 2x logical size, so a 1710x1107 window produces a 3420x2214 framebuffer. Fix: set `required_limits.max_texture_dimension_2d = 8192` in `DeviceDescriptor`. Metal supports 16384.
 - **llvmpipe rendering differs from real GPU**: Anti-aliasing, blending, and precision differ slightly. Don't expect pixel-identical output between software and hardware rendering. Use tolerance-based comparison.
 - **GLFW under xvfb**: Some GLFW versions fail to initialize without a real GPU. May need `LIBGL_ALWAYS_SOFTWARE=1` in addition to `WGPU_BACKEND=gl`.

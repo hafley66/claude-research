@@ -80,9 +80,32 @@ fn get_terminal_pid() -> Option<i32> {
 
 ```toml
 [target.'cfg(target_os = "macos")'.dependencies]
-core-foundation = "0.9"
-core-graphics = "0.23"
+core-foundation = "0.10"
+core-graphics = "0.25"
 ```
+
+Note: the `core-graphics` crate's `CGWindowListCopyWindowInfo` binding uses raw `CFDictionaryRef` pointers. Extracting values requires unsafe `CFDictionaryGetValue` + `TCFType::wrap_under_get_rule` casts. The `kCGWindowBounds` value is itself a nested `CFDictionaryRef` with keys "X", "Y", "Width", "Height" as `CFNumber` values.
+
+### Working raw CFDictionary extraction
+
+The pseudocode above uses a convenience API that doesn't exist on the actual crate. The real pattern:
+
+```rust
+use core_foundation::base::TCFType;
+use core_foundation::dictionary::{CFDictionaryGetValue, CFDictionaryRef};
+use core_foundation::number::{CFNumber, CFNumberRef};
+use core_foundation::string::CFString;
+
+unsafe fn dict_get_f64(dict: CFDictionaryRef, key: &str) -> f64 {
+    let cf_key = CFString::new(key);
+    let val = unsafe { CFDictionaryGetValue(dict, cf_key.as_CFTypeRef() as *const _) };
+    if val.is_null() { return 0.0; }
+    let cf_num: CFNumber = unsafe { TCFType::wrap_under_get_rule(val as CFNumberRef) };
+    cf_num.to_f64().unwrap_or(0.0)
+}
+```
+
+Rust 2024 edition requires explicit `unsafe {}` blocks inside `unsafe fn`.
 
 ### Title bar offset
 

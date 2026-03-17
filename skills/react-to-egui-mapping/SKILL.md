@@ -203,6 +203,7 @@ if ui.button("+").clicked() {
 | `overflow: scroll` | `egui::ScrollArea::vertical().show(ui, |ui| ...)` | Horizontal, vertical, or both |
 | `overflow: hidden` | `ui.set_clip_rect(rect)` | Clips children to rect |
 | `z-index` | `egui::Order` / `LayerId` | `LayerId::new(Order::Foreground, id)` |
+| Fixed HUD overlay (above everything) | `ctx.layer_painter(LayerId::new(Order::Foreground, id))` | Draws above all panels/widgets; no `Response`, hit test manually via `ctx.input(|i| i.pointer...)` |
 | CSS Grid | `egui::Grid::new(id).show(ui, |ui| { ... ui.end_row(); })` | Simple grid. For CSS Grid semantics: `egui_taffy` |
 | Flexbox (full spec) | `egui_flex` crate | grow/shrink/basis/wrap |
 | `@media` queries | Check `ctx.screen_rect().width()` | Manual breakpoints |

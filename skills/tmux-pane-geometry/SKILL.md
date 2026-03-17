@@ -151,7 +151,21 @@ tmux set-hook -g after-select-layout  'run-shell "hud-sync layout"'
 tmux set-hook -g session-window-changed 'run-shell "hud-sync window-change"'
 ```
 
+**Hooks carry no payload.** The hook fires but the `run-shell` command receives no geometry data. You must call `tmux list-panes` yourself inside the hook handler to get current state. This is by design -- treat hooks as an invalidation signal only.
+
+Available hooks relevant to overlay positioning: `after-resize-pane`, `after-split-window`, `after-select-layout`, `session-window-changed`.
+
 These invoke a command that signals the overlay daemon via unix socket. Faster than polling but polling is the reliable fallback.
+
+### tmux control mode (-CC)
+
+`tmux -CC` provides structured event streaming with `%`-prefixed events (e.g. `%layout-change`). Events are richer than hooks but control mode takes over the terminal session and is heavier than needed for overlay positioning. Use hooks + list-panes instead unless you need full session control.
+
+### Pixel dimensions are not in tmux's scope
+
+tmux only knows character grid dimensions (`pane_width`, `pane_height` in cells). Pixel conversion always requires a terminal-side query: TIOCGWINSZ ioctl or CSI 16t. There is no tmux format variable for pixel sizes.
+
+No established pattern exists for tmux + graphical overlay positioning -- this is greenfield territory.
 
 ## Testing strategy
 

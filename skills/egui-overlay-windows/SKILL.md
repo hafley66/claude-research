@@ -11,24 +11,85 @@ metadata:
 
 Using `egui_overlay` to create transparent, borderless, always-on-top windows that render arbitrary egui content. This crate solves the hard platform-specific problems (transparency compositing, click-through, window level) that raw winit leaves as exercises.
 
-## wgpu transparency on macOS
+## macOS transparency: the full stack
 
-`egui_overlay::start()` sets wgpu surface alpha mode to `Auto`, which resolves to `Opaque` on macOS. To get actual transparency you must inline `start()` and set:
+Three independent layers must all be configured. Missing any one produces an opaque window.
+
+### Layer 1: NSWindow properties (most commonly missed)
+
+winit's `.with_transparent(true)` sets a flag but does NOT configure the NSWindow. The macOS compositor checks `isOpaque` and `backgroundColor` on the NSWindow itself. Without these, the compositor treats the window as solid and skips compositing through it.
 
 ```rust
-// In WgpuConfig / surface config
-surface_config.alpha_mode = wgpu::CompositeAlphaMode::PostMultiplied;
-// PreMultiplied is not in the supported list on macOS Metal ("not in the list of supported alpha modes: [Opaque, PostMultiplied]")
+#[cfg(target_os = "macos")]
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+// After creating the winit Window:
+#[cfg(target_os = "macos")]
+{
+    if let Ok(handle) = window.window_handle() {
+        if let RawWindowHandle::AppKit(appkit) = handle.as_raw() {
+            unsafe {
+                use objc2_app_kit::{NSColor, NSView};
+                let ns_view: &NSView = appkit.ns_view.cast().as_ref();
+                if let Some(ns_window) = ns_view.window() {
+                    ns_window.setOpaque(false);
+                    ns_window.setBackgroundColor(Some(&NSColor::clearColor()));
+                    ns_window.setHasShadow(false);
+                }
+            }
+        }
+    }
+}
 ```
 
-Also set egui visuals to transparent:
+**Deps**: `raw-window-handle = "0.6"` as explicit dep. `objc2-app-kit` with features `NSColor`, `NSView`, `NSWindow` -- winit already depends on this (v0.2.2), so no binary bloat.
 
+**Access path**: winit `Window` -> `HasWindowHandle` -> `AppKitWindowHandle.ns_view` -> cast to `&NSView` -> `.window()` -> `NSWindow`.
+
+### Layer 2: wgpu CompositeAlphaMode
+
+The wgpu surface alpha mode controls how GPU-rendered pixels blend with windows behind:
+
+```rust
+let caps = surface.get_capabilities(&adapter);
+let alpha_mode = if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::PreMultiplied) {
+    wgpu::CompositeAlphaMode::PreMultiplied  // preferred on macOS Metal
+} else if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::PostMultiplied) {
+    wgpu::CompositeAlphaMode::PostMultiplied  // fallback, works with NSWindow fix
+} else {
+    caps.alpha_modes[0]
+};
+```
+
+Clear the render pass to transparent:
+```rust
+ops: wgpu::Operations {
+    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+    store: wgpu::StoreOp::Store,
+}
+```
+
+### Layer 3: egui panel background
+
+egui's default dark theme paints an opaque background. Both `Frame::none()` (remove panel chrome) AND `.fill(TRANSPARENT)` are needed:
+
+```rust
+egui::CentralPanel::default()
+    .frame(egui::Frame::none().fill(egui::Color32::TRANSPARENT))
+    .show(ctx, |ui| { /* content */ });
+```
+
+Or set it globally via visuals:
 ```rust
 let mut visuals = egui::Visuals::dark();
 visuals.window_fill = egui::Color32::TRANSPARENT;
 visuals.panel_fill = egui::Color32::TRANSPARENT;
 ctx.set_visuals(visuals);
 ```
+
+### egui_overlay crate shortcut
+
+`egui_overlay::start()` sets wgpu surface alpha mode to `Auto`, which resolves to `Opaque` on macOS. To get actual transparency you must inline `start()` and set `PostMultiplied` manually, plus the NSWindow properties above.
 
 ## Crate
 
@@ -125,9 +186,15 @@ For drawing arbitrary shapes without Window/Area widgets (the overlay drawing us
 ### Getting a full-screen painter
 
 ```rust
-// Option A: layer_painter (lowest level, no widget overhead)
+// Option A: background order -- draws below all panels/widgets
 let painter = ctx.layer_painter(egui::LayerId::background());
 painter.set_clip_rect(ctx.screen_rect()); // prevent clipping at default bounds
+
+// Option B: foreground order -- draws ABOVE all panels/widgets (use for HUD)
+let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("hud")));
+```
+
+`Order::Background` draws below egui panels. `Order::Foreground` draws above them. For HUD overlays that must float over app content (radar, status bar, tooltips), use `Order::Foreground`.
 
 // Option B: allocate_painter via CentralPanel
 egui::CentralPanel::default()
@@ -190,6 +257,23 @@ painter.extend(shapes);   // batch add Vec<Shape>
 ```
 
 All coordinates are screen-space logical points. Shapes are regenerated each frame (immediate mode).
+
+### Hit testing on painted shapes
+
+Shapes added via `painter.add()` return no `Response`. Manual hit testing:
+
+```rust
+let clicked = ctx.input(|i| {
+    i.pointer.any_click()
+        && i.pointer.interact_pos().map_or(false, |p| shape_rect.contains(p))
+});
+let hovered = ctx.input(|i| {
+    i.pointer.hover_pos().map_or(false, |p| shape_rect.contains(p))
+});
+if hovered { ctx.set_cursor_icon(egui::CursorIcon::PointingHand); }
+```
+
+This applies to any shape painted directly onto a `layer_painter` -- buttons, icons, minimap elements, etc.
 
 ### Coordinate mapping
 
@@ -272,7 +356,7 @@ GPU cost is primarily fill rate. A fullscreen transparent surface on retina Mac 
 | `egui_overlay` | Low | Built-in (per-widget) | PostMultiplied wgpu | Full epaint API |
 | eframe + ViewportBuilder | Medium | Manual `set_cursor_hittest` | `clear_color` + Frame::none | Full epaint API |
 | Raw winit + wgpu + egui_wgpu | High | Manual per-frame toggle | Manual CompositeAlphaMode | Full epaint + raw wgpu callbacks |
-| Raw NSWindow + objc2 + wgpu | Very high | `ignoresMouseEvents` directly | `setOpaque:NO` + `clearColor` | Anything |
+| Raw NSWindow + objc2 + wgpu | Very high | `ignoresMouseEvents` directly | `setOpaque:NO` + `clearColor` (proven working) | Anything |
 
 ### winit transparent window (without egui_overlay)
 
@@ -297,6 +381,26 @@ let options = eframe::NativeOptions {
 };
 // Must return transparent clear color AND use Frame::none() on CentralPanel
 ```
+
+## Hiding the dock icon on macOS
+
+GLFW has no API for this. `LSUIElement` in Info.plist alone won't work because GLFW resets the activation policy to `Regular` during startup.
+
+The correct fix is to call `NSApp.setActivationPolicy(.accessory)` via objc2 **after** GLFW init:
+
+```rust
+use objc2::MainThreadMarker;
+use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+
+// Call this after egui_overlay::start() has initialized GLFW:
+let mtm = unsafe { MainThreadMarker::new_unchecked() };
+let app = NSApplication::sharedApplication(mtm);
+app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+```
+
+- `setActivationPolicy` is safe (no `unsafe` block needed for the call itself) in objc2 0.6+
+- objc2 0.6+ requires `MainThreadMarker` for `sharedApplication()`; `new_unchecked()` is safe here because GLFW has already run on the main thread
+- `Accessory` policy hides the dock icon and menu bar entry; the window still renders and receives events
 
 ## Platform notes
 
@@ -326,6 +430,67 @@ let options = eframe::NativeOptions {
 | screen_overlay (iwanders) | github.com/iwanders/screen_overlay | Win + X11 overlay, egui |
 | wayscriber | github.com/devmobasa/wayscriber | Screen annotation for Wayland |
 | rnote | github.com/flxzt/rnote | Vector drawing/annotation (GTK4) |
+
+## Dirty-flag redraw throttle (winit)
+
+Don't `request_redraw()` every frame in `about_to_wait`. For data-driven overlays where content only changes when external state updates, a dirty flag prevents 60fps CPU/GPU burn on static content:
+
+```rust
+struct SharedState {
+    panes: Vec<PaneRect>,
+    dirty: bool,
+}
+
+// Producer (async pipeline thread):
+state.lock().unwrap().dirty = true;
+
+// Consumer (winit event loop):
+fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+    let dirty = self.state.lock().map(|s| s.dirty).unwrap_or(false);
+    if dirty {
+        if let Some(renderer) = &self.renderer {
+            renderer.window.request_redraw();
+        }
+    }
+}
+
+// In RedrawRequested handler:
+let mut s = self.state.lock().unwrap();
+if !s.dirty { return; }
+s.dirty = false;
+let data = s.panes.clone();
+// ... render data ...
+```
+
+## Border overlay geometry
+
+For overlays that frame a target window with colored strips (leaving the center transparent):
+
+```rust
+// Top/bottom extend past target by thickness (fill corners).
+// Left/right fit between top and bottom.
+//
+//   ┌──────────────────────────┐
+//   │          TOP             │
+//   ├───┬──────────────────┬───┤
+//   │ L │   transparent    │ R │
+//   ├───┴──────────────────┴───┤
+//   │         BOTTOM           │
+//   └──────────────────────────┘
+
+fn compute_border_rects(target: &PixelRect, thickness: u32) -> [PixelRect; 4] {
+    let t = thickness as i32;
+    let tw = thickness;
+    [
+        PixelRect { x: target.x - t, y: target.y - t, w: target.w + 2*tw, h: tw },       // top
+        PixelRect { x: target.x - t, y: target.y + target.h as i32, w: target.w + 2*tw, h: tw }, // bottom
+        PixelRect { x: target.x - t, y: target.y, w: tw, h: target.h },                   // left
+        PixelRect { x: target.x + target.w as i32, y: target.y, w: tw, h: target.h },     // right
+    ]
+}
+```
+
+The overlay window is sized to `target + thickness` on all sides. Each border rect is converted to window-local coordinates by subtracting the window origin.
 
 ## Testing
 

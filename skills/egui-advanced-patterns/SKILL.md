@@ -35,6 +35,16 @@ ctx.input(|i| {
 });
 ```
 
+### Sin-wave glow / pulse effect
+
+Maps a time value to a 0.4..1.0 alpha oscillation for warning or active glow:
+
+```rust
+let alpha = ((time * TAU * freq).sin() * 0.3 + 0.7) as u8 * 255; // ~0.4..1.0
+```
+
+Apply independently to fill alpha, stroke alpha, and text alpha for layered depth. `freq = 1.0` is a 1Hz pulse; `freq = 2.0` is a fast warning flash.
+
 ### Easing functions
 
 egui built-in: `emath::easing::quadratic_out`. The `simple_easing` crate (re-exported by `egui_animation`) provides 30 functions: `linear`, `quad_in/out/in_out`, `cubic_*`, `elastic_*`, `bounce_*`, etc. All `fn(f32) -> f32` mapping `[0,1] -> [0,1]`.
@@ -291,6 +301,59 @@ FormField { label: "Email", error: validate_email(&self.email) }
 ```
 
 Note: no MUI-equivalent library exists because each component is 20-50 lines and the egui ecosystem is fragmented across multiple GUI frameworks. Components are written inline or in local modules.
+
+## HUD overlays with layer_painter
+
+`ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("hud")))` returns a painter that draws above all panels and widgets. Use this for floating HUD elements (radar, status bars, crosshairs) that must not be part of any panel's layout.
+
+```rust
+let painter = ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("radar")));
+// painter draws above CentralPanel, SidePanel, Windows -- everything
+```
+
+Contrast with `LayerId::background()` used in egui-overlay-windows: background-order painters draw below panels, foreground-order painters draw above them.
+
+### Manual hit testing on layer_painter elements
+
+egui does not handle click detection for shapes added via `layer_painter` (no `Response` is returned). Pattern:
+
+```rust
+let clicked = ctx.input(|i| {
+    i.pointer.any_click()
+        && i.pointer.interact_pos().map_or(false, |p| btn_rect.contains(p))
+});
+let hovered = ctx.input(|i| {
+    i.pointer.hover_pos().map_or(false, |p| btn_rect.contains(p))
+});
+if hovered { ctx.set_cursor_icon(CursorIcon::PointingHand); }
+```
+
+### convex_polygon for custom shapes
+
+Warning triangles, custom icons, etc.:
+
+```rust
+let points = vec![top, bottom_left, bottom_right];
+painter.add(Shape::convex_polygon(points, fill_color, stroke));
+```
+
+egui 0.31 requires `Shape::convex_polygon`; earlier path-based approaches (`PathShape`) still work but `convex_polygon` is the idiomatic shorthand.
+
+### egui 0.31: rect_stroke takes 4 args
+
+`painter.rect_stroke()` signature changed in 0.31:
+
+```rust
+// 0.31+
+painter.rect_stroke(rect, corner_radius, stroke, StrokeKind::Outside);
+// StrokeKind variants: Outside, Inside, Middle
+```
+
+The fourth `StrokeKind` parameter controls whether the stroke is drawn outside, inside, or centered on the rect boundary.
+
+### Minimap / radar coordinate mapping
+
+Scale factor from screen space to radar space: `scale = RADIUS / max_screen_extent`. Clamp the transformed vector length to `RADIUS` for edge-clamping (dots at the radar boundary when targets are far away). This is the general pattern for any minimap or overview widget.
 
 ## Notable widget crates
 

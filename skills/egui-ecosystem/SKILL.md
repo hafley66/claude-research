@@ -74,8 +74,9 @@ See `egui-advanced-patterns` skill for animation API details.
 |---|---|---|
 | `egui_overlay` | Transparent click-through overlay windows | [coderedart/egui_overlay](https://github.com/coderedart/egui_overlay) |
 | `screen_overlay` | Win + X11 overlay, RAII handles | [iwanders/screen_overlay](https://github.com/iwanders/screen_overlay) |
+| raw winit+wgpu+egui | No crate -- manual setup, full control | See `egui-overlay-windows` skill |
 
-See `egui-overlay-windows` skill for overlay details.
+See `egui-overlay-windows` skill for overlay details. The raw winit+wgpu approach avoids the GLFW dependency of `egui_overlay` and gives direct NSWindow access for transparency configuration. Requires more boilerplate but provides the most control for custom overlay geometry (border frames, shaped windows).
 
 ## Infrastructure
 

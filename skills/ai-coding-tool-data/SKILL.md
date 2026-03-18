@@ -13,7 +13,11 @@ Data interfaces for building external tooling (HUDs, dashboards, analyzers) on t
 
 ### Data Interfaces (ranked by HUD suitability)
 
-#### 1. Status Line Script (best for real-time HUD)
+#### 1. JSONL Transcripts (zero-config, best for dashboards)
+
+See section 2 below. Reading JSONL directly requires no config changes -- Claude Code writes it unconditionally. The status line approach overrides the existing status display, making it more invasive.
+
+#### 2. Status Line Script (real-time, but overrides existing status line)
 
 Config in `~/.claude/settings.json`:
 ```json
@@ -43,7 +47,7 @@ Receives JSON on stdin after every assistant message:
 | `transcript_path` | string | Path to session JSONL |
 | `version` | string | Claude Code version |
 
-#### 2. JSONL Transcripts (per-session history)
+#### 3. JSONL Transcripts (per-session history)
 
 Path: `~/.claude/projects/<project-path-dashes>/<session-uuid>.jsonl`
 
@@ -63,11 +67,15 @@ Each line is a JSON object with `type` field:
 
 Model at `.message.model`. Stop reason at `.message.stop_reason`.
 
-**Cost is NOT in JSONL** -- must be computed from token counts and known pricing.
+**Cost is NOT in JSONL** -- must be computed from token counts and known pricing (see Pricing section below).
 
-Other message types: `user` (with `sessionId`, `version`, `gitBranch`, `cwd`), `progress` (tool streaming), `file-history-snapshot`.
+Tool use blocks appear in `.message.content[]` with `type="tool_use"`. Each has `id`, `name`, `input`, and `caller`. Agent spawns are identified by `name="Agent"`.
 
-#### 3. Stats Cache (aggregated)
+The `caller` field is always `{"type":"direct"}` for all tool calls including subagent spawns -- subagent costs are NOT separately tracked in JSONL. All token costs roll up to the top-level session.
+
+All message types: `user` (with `sessionId`, `version`, `gitBranch`, `cwd`), `assistant`, `progress` (tool streaming), `file-history-snapshot`, `system`, `queue-operation`, `last-prompt`.
+
+#### 4. Stats Cache (aggregated)
 
 Path: `~/.claude/stats-cache.json`
 
@@ -77,7 +85,7 @@ Contains:
 - `modelUsage`: `{ "model": { inputTokens, outputTokens, cacheReadInputTokens, cacheCreationInputTokens, costUSD } }`
 - `totalSessions`, `totalMessages`, `longestSession`, `firstSessionDate`, `hourCounts`
 
-#### 4. OTel Telemetry (richest, opt-in)
+#### 5. OTel Telemetry (richest, opt-in)
 
 Enable: `export CLAUDE_CODE_ENABLE_TELEMETRY=1`
 
@@ -102,16 +110,28 @@ Events (via OTel logs):
 - `claude_code.tool_result`: tool_name, success, duration_ms, error
 - `claude_code.user_prompt`: prompt_length
 
-#### 5. Other Files
+#### 6. Other Files
 
 - `~/.claude/history.jsonl` -- prompt history (text, timestamp, project, sessionId)
 - `~/.claude/sessions/<pid>.json` -- `{ pid, sessionId, cwd, startedAt }`
 
 ### Active Session Detection
 
-Running Claude Code sessions write `~/.claude/sessions/<pid>.json`. Check if PID is alive to find active sessions.
+Running Claude Code sessions write `~/.claude/sessions/<pid>.json`. Check if PID is alive (`kill -0 <pid>`) to find active sessions.
 
 Env var `CLAUDECODE=1` is set inside Claude Code processes.
+
+### Pricing (for computing cost from JSONL token counts)
+
+JSONL does not distinguish cache write tier (5-minute vs 1-hour). Prices as of early 2026:
+
+| Model | Input ($/MTok) | Output ($/MTok) | Cache read | Cache write |
+|---|---|---|---|---|
+| Claude Opus 4.6 / 4.5 | $5 | $25 | 0.1x input | 1.25x input (5m) / 2x input (1h) |
+| Claude Sonnet 4.x | $3 | $15 | 0.1x input | same multipliers |
+| Claude Haiku 4.5 | $1 | $5 | 0.1x input | same multipliers |
+
+Note: Opus 4.6/4.5 pricing changed from the older Opus 4/4.1 rates ($15/$75). Do not use the old rates.
 
 ---
 

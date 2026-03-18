@@ -52,25 +52,43 @@ fn parse_pane_geometry(stdout: &str) -> Vec<PaneGeometry> {
 
 ### TIOCGWINSZ ioctl
 
-Returns terminal dimensions in both characters and pixels:
+Returns terminal dimensions in both characters and pixels. Can be called on any open tty fd, not just `STDOUT_FILENO`. This matters in tmux: get the pane's tty path via `#{pane_tty}`, open it, and ioctl that fd to get pixel metrics for that specific pane.
 
 ```rust
 use libc::{ioctl, winsize, TIOCGWINSZ, STDOUT_FILENO};
+use std::fs::File;
+use std::os::unix::io::AsRawFd;
 
-fn get_cell_metrics() -> Option<(u32, u32)> {
+fn get_cell_metrics_for_tty(tty_path: &str) -> Option<(u32, u32)> {
+    let file = File::open(tty_path).ok()?;
     let mut ws: winsize = unsafe { std::mem::zeroed() };
-    let ret = unsafe { ioctl(STDOUT_FILENO, TIOCGWINSZ, &mut ws) };
+    let ret = unsafe { ioctl(file.as_raw_fd(), TIOCGWINSZ, &mut ws) };
     if ret != 0 || ws.ws_xpixel == 0 || ws.ws_ypixel == 0 {
-        return None; // many terminals return 0 for pixel fields
+        return None;
     }
     Some((
         ws.ws_xpixel as u32 / ws.ws_col as u32,  // cell width in pixels
         ws.ws_ypixel as u32 / ws.ws_row as u32,   // cell height in pixels
     ))
 }
+
+// For the active pane on stdout:
+fn get_cell_metrics() -> Option<(u32, u32)> {
+    get_cell_metrics_for_tty("/dev/tty")
+        .or_else(|| {
+            let mut ws: winsize = unsafe { std::mem::zeroed() };
+            let ret = unsafe { ioctl(STDOUT_FILENO, TIOCGWINSZ, &mut ws) };
+            if ret != 0 || ws.ws_xpixel == 0 { return None; }
+            Some((ws.ws_xpixel as u32 / ws.ws_col as u32, ws.ws_ypixel as u32 / ws.ws_row as u32))
+        })
+}
 ```
 
-**Reliability warning**: Many terminals return 0 for `ws_xpixel`/`ws_ypixel`. Known to work: xterm, foot, kitty. Known broken: some builds of gnome-terminal, older alacritty.
+tmux format `#{pane_tty}` gives the tty path (e.g. `/dev/ttys003`) for any pane. Use this to query cell metrics without needing the terminal to be focused.
+
+**Reliability warning**: Many terminals return 0 for `ws_xpixel`/`ws_ypixel`. Known to work: xterm, foot, kitty, iTerm2. Known broken: some builds of gnome-terminal, older alacritty.
+
+**Retina note**: iTerm2 on Retina returns physical pixels at 2x scale (e.g. 22x50 per cell). Heuristic: `cell_w > 14` indicates Retina (2x). Standard monospace at typical sizes yields 7-10px wide cells at 1x. For exact scale factor, query `NSScreen.backingScaleFactor` via objc2.
 
 ### Fallback: CSI 16 t
 
@@ -105,6 +123,32 @@ fn pane_pixel_rect(
 ```
 
 Scale factor matters on Retina/HiDPI displays (2.0 on macOS Retina).
+
+### Terminal inset correction
+
+`tmux list-panes` cell dimensions describe only the character grid. Terminal emulators add internal content margins around the grid (iTerm2 defaults: ~4px left, ~4px right, ~2px top in logical points). These margins are NOT included in cell coordinates.
+
+This matters for width alignment: the tmux status bar background fills the full terminal row including margins, so an overlay computed as `pane_width * cell_w` will be visibly narrower than the bar. The pane x position also begins at the cell grid edge (offset right by the left margin from the window content edge).
+
+```rust
+pub struct TerminalInsets {
+    pub left: i32,
+    pub right: i32,
+    pub top: i32,
+}
+
+impl TerminalInsets {
+    pub fn iterm2_default() -> Self {
+        Self { left: 4, right: 4, top: 2 }
+    }
+}
+
+// Corrected rect:
+let pane_x = window_x + insets.left + (pane.cell_left * cell_w) as i32;
+let pane_w = (pane.cell_width * cell_w) as i32 + insets.left + insets.right;
+```
+
+Without this correction, overlays that are meant to span the full terminal row will be offset and undersized by the margin amount on each side.
 
 ## Pane diff events
 
@@ -166,6 +210,27 @@ These invoke a command that signals the overlay daemon via unix socket. Faster t
 tmux only knows character grid dimensions (`pane_width`, `pane_height` in cells). Pixel conversion always requires a terminal-side query: TIOCGWINSZ ioctl or CSI 16t. There is no tmux format variable for pixel sizes.
 
 No established pattern exists for tmux + graphical overlay positioning -- this is greenfield territory.
+
+## bin/launch pattern for tmux overlay apps
+
+Shell wrapper that creates a dedicated tmux session and starts an overlay binary inside it:
+
+```bash
+#!/usr/bin/env bash
+NAME="cc-hud-$(date +%s)-$$"
+tmux new-session -d -s "$NAME" -x "$(tput cols)" -y "$(tput lines)"
+MAIN_PANE=$(tmux list-panes -t "$NAME" -F '#{pane_id}' | head -1)
+# Split a 1-line pane for the daemon, pass the main pane's global ID
+tmux split-window -t "$NAME" -v -l 1 "my-overlay-binary $MAIN_PANE"
+tmux select-pane -t "$NAME:.0"
+exec tmux attach -t "$NAME"
+```
+
+Key points:
+- Generate a unique session name with `date +%s` + `$$` to avoid collisions.
+- Capture the main pane ID (`#{pane_id}` global format, e.g. `%3`) before splitting.
+- Pass the pane ID (not the session name) to the binary so it targets the correct pane unambiguously -- the daemon runs in a different pane of the same session.
+- Size the session to the current terminal with `tput cols`/`tput lines`.
 
 ## Testing strategy
 

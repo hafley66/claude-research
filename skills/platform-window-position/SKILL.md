@@ -19,62 +19,95 @@ Use `CGWindowListCopyWindowInfo` with `kCGWindowListOptionOnScreenOnly`, iterate
 
 The most reliable macOS approach. No accessibility permissions needed.
 
-```rust
-use core_foundation::base::TCFType;
-use core_foundation::dictionary::CFDictionary;
-use core_foundation::number::CFNumber;
-use core_foundation::string::CFString;
-use core_graphics::display::*;
+**Critical**: `CGWindowListCopyWindowInfo()` returns `*const __CFArray` (a raw pointer), NOT `Option<CFArray>`. Must null-check and wrap manually:
 
-fn get_terminal_window_rect(terminal_pid: i32) -> Option<(i32, i32, u32, u32)> {
-    let windows = CGWindowListCopyWindowInfo(
+```rust
+unsafe {
+    let ptr = CGWindowListCopyWindowInfo(
         kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
         kCGNullWindowID,
-    )?;
+    );
+    if ptr.is_null() { return None; }
+    // ptr is now a valid owned CFArray -- use create_rule
+    // But don't use the high-level CFArray .get() -- returns ItemRef that can't cast to CFDictionaryRef
+    // Use raw C functions instead:
+    let count = CFArrayGetCount(ptr);
+    for i in 0..count {
+        let dict_ptr = CFArrayGetValueAtIndex(ptr, i) as CFDictionaryRef;
+        // ... extract fields via CFDictionaryGetValue
+    }
+}
+```
 
-    for i in 0..windows.len() {
-        let window: CFDictionary = windows.get(i);
+The high-level `CFArray<T>.get(i)` returns `ItemRef` which cannot be cleanly cast to `CFDictionaryRef`. `CFArrayGetCount` and `CFArrayGetValueAtIndex` return `*const c_void` that cast to `CFDictionaryRef` without issue.
 
-        let pid = window.get("kCGWindowOwnerPID")?.downcast::<CFNumber>()?.to_i32()?;
-        if pid != terminal_pid {
-            continue;
+### Getting the terminal PID
+
+**`TERM_PROGRAM` is unreliable inside tmux/screen**: When running inside tmux, `TERM_PROGRAM` is set to `"tmux"`, not the real terminal emulator name. Same for `screen`. Any code that reads `TERM_PROGRAM` to identify the terminal (e.g. to find its PID) must fall through to a process-list scan when the value is `"tmux"` or `"screen"`:
+
+```rust
+const KNOWN_TERMINALS: &[&str] = &[
+    "iTerm2", "Terminal", "wezterm-gui", "alacritty", "kitty", "WezTerm",
+];
+
+if term == "tmux" || term == "screen" {
+    return find_terminal_by_scan();
+}
+
+fn find_terminal_by_scan() -> Option<i32> {
+    let output = Command::new("ps").args(["-eo", "pid,comm"]).output().ok()?;
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        let mut parts = trimmed.splitn(2, char::is_whitespace);
+        let pid_str = parts.next()?;
+        let comm = parts.next()?.trim();
+        let binary = comm.rsplit('/').next().unwrap_or(comm);
+        if KNOWN_TERMINALS.iter().any(|t| *t == binary) {
+            return pid_str.parse().ok();
         }
-
-        // kCGWindowBounds is a CFDictionary with X, Y, Width, Height
-        let bounds = window.get("kCGWindowBounds")?;
-        let rect = CGRect::from_dict_representation(&bounds)?;
-
-        return Some((
-            rect.origin.x as i32,
-            rect.origin.y as i32,
-            rect.size.width as u32,
-            rect.size.height as u32,
-        ));
     }
     None
 }
 ```
 
-### Getting the terminal PID
+**Do not use `pgrep -x`** -- it matches against the `comm` field which for macOS app bundles contains the full path, so `-x` (exact match) never fires.
+
+Walk the ppid chain instead:
 
 ```rust
+// Chain inside tmux: our_process → shell → tmux_server → terminal_emulator
+// Use: ps -o ppid= -p PID  to get parent
+//      ps -o comm= -p PID  to get binary path (needs rsplit('/').next() for name)
+
 fn get_terminal_pid() -> Option<i32> {
-    // $TMUX contains: /tmp/tmux-501/default,12345,0
-    // The middle number is the tmux server PID
-    // But we want the terminal emulator PID, not tmux
+    let mut pid = std::process::id() as i32;
+    let known = ["iTerm2", "WezTerm", "Alacritty", "Terminal", "kitty", "Hyper"];
+    for _ in 0..8 {
+        let comm = ps_comm(pid)?;
+        let name = comm.rsplit('/').next().unwrap_or(&comm);
+        if known.iter().any(|&k| name == k) { return Some(pid); }
+        pid = ps_ppid(pid)?;
+    }
+    None
+}
 
-    // Option 1: Walk up the process tree from our PID
-    // our process → shell → tmux client → terminal
-    let ppid = std::os::unix::process::parent_id(); // shell
-    let shell_ppid = get_ppid(ppid)?;                // tmux client or terminal
-    // ... walk up until you hit a known terminal binary
+fn ps_ppid(pid: i32) -> Option<i32> {
+    let out = std::process::Command::new("ps")
+        .args(["-o", "ppid=", "-p", &pid.to_string()])
+        .output().ok()?;
+    String::from_utf8(out.stdout).ok()?.trim().parse().ok()
+}
 
-    // Option 2: Use $TERM_PROGRAM or check known terminal bundle IDs
-    // "WezTerm", "Alacritty", "iTerm.app", "Apple_Terminal"
-    let term = std::env::var("TERM_PROGRAM").ok()?;
-    find_pid_by_name(&term)
+fn ps_comm(pid: i32) -> Option<String> {
+    let out = std::process::Command::new("ps")
+        .args(["-o", "comm=", "-p", &pid.to_string()])
+        .output().ok()?;
+    Some(String::from_utf8(out.stdout).ok()?.trim().to_string())
 }
 ```
+
+`ps -o comm=` returns the full path on macOS; strip to basename with `rsplit('/').next()`.
 
 ### Crates for macOS
 
@@ -88,22 +121,27 @@ Note: the `core-graphics` crate's `CGWindowListCopyWindowInfo` binding uses raw 
 
 ### Working raw CFDictionary extraction
 
-The pseudocode above uses a convenience API that doesn't exist on the actual crate. The real pattern:
-
 ```rust
 use core_foundation::base::TCFType;
 use core_foundation::dictionary::{CFDictionaryGetValue, CFDictionaryRef};
 use core_foundation::number::{CFNumber, CFNumberRef};
 use core_foundation::string::CFString;
 
-unsafe fn dict_get_f64(dict: CFDictionaryRef, key: &str) -> f64 {
-    let cf_key = CFString::new(key);
-    let val = unsafe { CFDictionaryGetValue(dict, cf_key.as_CFTypeRef() as *const _) };
-    if val.is_null() { return 0.0; }
-    let cf_num: CFNumber = unsafe { TCFType::wrap_under_get_rule(val as CFNumberRef) };
-    cf_num.to_f64().unwrap_or(0.0)
+fn cf_dict_get_i32(dict: CFDictionaryRef, key: &str) -> Option<i32> {
+    unsafe {
+        let cf_key = CFString::new(key);
+        // as_CFTypeRef() requires TCFType in scope
+        let val = CFDictionaryGetValue(dict, cf_key.as_CFTypeRef() as *const _);
+        if val.is_null() { return None; }
+        // wrap_under_get_rule for borrowed refs (dictionary lookup = no ownership transfer)
+        // wrap_under_create_rule for owned refs (from Create functions)
+        let cf_num: CFNumber = TCFType::wrap_under_get_rule(val as CFNumberRef);
+        cf_num.to_i32()
+    }
 }
 ```
+
+`kCGWindowBounds` is a nested `CFDictionaryRef` with keys `"X"`, `"Y"`, `"Width"`, `"Height"` as `CFNumber`. Extract it the same way, cast the `*const c_void` value to `CFDictionaryRef`, then recurse.
 
 Rust 2024 edition requires explicit `unsafe {}` blocks inside `unsafe fn`.
 
@@ -120,6 +158,16 @@ let content_y = window_y + MACOS_TITLEBAR_HEIGHT;
 ```
 
 For borderless/fullscreen terminals, offset is 0.
+
+### Three distinct origin points
+
+When placing overlays against terminal pane coordinates, there are three different x/y origins in play:
+
+1. **Window frame origin** -- what CGWindowListCopyWindowInfo returns (includes title bar vertically)
+2. **Content area origin** -- window frame + title bar height; where the terminal emulator draws
+3. **Cell grid origin** -- content area + terminal insets (e.g. iTerm2 adds ~4px left, ~2px top margin inside the content area before the character grid starts)
+
+Cell coordinates from `tmux list-panes` are relative to the cell grid origin (#3). To place an overlay at a pane's screen position, add all three offsets. Skipping the inset step causes the overlay to misalign by a few pixels from the visible cell content and to be narrower than the full terminal row (since the right inset is not added to width either).
 
 ## macOS: Accessibility API (alternative)
 

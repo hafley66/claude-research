@@ -154,6 +154,12 @@ fn gui_run(&mut self, ctx: &egui::Context, _gfx: &mut ThreeDBackend, glfw: &mut 
 }
 ```
 
+### Terminal inset awareness
+
+When positioning an overlay to align with a tmux pane (e.g. to match the tmux status bar), the pane pixel rect derived from cell coordinates alone is narrower than the visible terminal row. Terminal emulators pad the cell grid with internal margins (iTerm2: ~4px left, ~4px right, ~2px top). These margins are not part of the cell grid dimensions.
+
+To span the full visible row, extend `set_pos` leftward by `insets.left` and `set_size` width by `insets.left + insets.right`. Without this, the overlay will float a few pixels inside the terminal edges and leave a visible gap on each side.
+
 ## Click-through behavior
 
 egui_overlay's GLFW backend checks `egui::Context::wants_pointer_input()` and `wants_keyboard_input()` each frame. When false (mouse over transparent area, not hovering any widget), passthrough is enabled. This is per-frame toggling.
@@ -382,25 +388,66 @@ let options = eframe::NativeOptions {
 // Must return transparent clear color AND use Frame::none() on CentralPanel
 ```
 
-## Hiding the dock icon on macOS
+## Focus stealing prevention on macOS (fullscreen / Spaces)
 
-GLFW has no API for this. `LSUIElement` in Info.plist alone won't work because GLFW resets the activation policy to `Regular` during startup.
+Getting any of these steps wrong or out of order causes the overlay to steal focus, switch Spaces, or flash at (0,0) before settling into position.
 
-The correct fix is to call `NSApp.setActivationPolicy(.accessory)` via objc2 **after** GLFW init:
+### Step 1: Set Accessory activation policy BEFORE GLFW init
+
+`NSApp.setActivationPolicy(.Accessory)` must be called BEFORE `GlfwBackend::new()`. GLFW's `glfwInit()` calls `[NSApp run]` which triggers `[NSApp activate]`. If the policy is still `Regular` at that point, macOS treats the app as foreground and switches to its Space. Doing it after (e.g. on first frame) is too late.
+
+```rust
+// BEFORE GlfwBackend::new():
+hide_dock_icon(); // sets Accessory policy
+
+// THEN create window:
+let glfw_backend = GlfwBackend::new(config);
+```
+
+### Step 2: FocusOnShow(false) hint
+
+```rust
+gtx.window_hint(glfw::WindowHint::FocusOnShow(false));
+```
+
+Prevents GLFW from requesting focus when `window.show()` is called. Without this, even Accessory apps can grab keyboard focus.
+
+### Step 3: Start hidden, position, then show
+
+```rust
+gtx.window_hint(glfw::WindowHint::Visible(false));
+// ... after computing position:
+glfw_backend.window.set_pos(x, y);
+glfw_backend.set_window_size([w, h]);
+glfw_backend.window.show(); // only now
+```
+
+Prevents the window from flashing at the default (0,0) position before real position is computed.
+
+### Combined order of operations
+
+1. `hide_dock_icon()` -- sets Accessory activation policy
+2. `GlfwBackend::new()` with `FocusOnShow(false)` + `Visible(false)` hints
+3. Compute target position (tmux pane rect, etc.)
+4. `window.set_pos()` + `set_window_size()`
+5. `window.show()`
+
+### hide_dock_icon implementation
 
 ```rust
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
 
-// Call this after egui_overlay::start() has initialized GLFW:
-let mtm = unsafe { MainThreadMarker::new_unchecked() };
-let app = NSApplication::sharedApplication(mtm);
-app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+fn hide_dock_icon() {
+    let mtm = unsafe { MainThreadMarker::new_unchecked() };
+    let app = NSApplication::sharedApplication(mtm);
+    app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+}
 ```
 
-- `setActivationPolicy` is safe (no `unsafe` block needed for the call itself) in objc2 0.6+
-- objc2 0.6+ requires `MainThreadMarker` for `sharedApplication()`; `new_unchecked()` is safe here because GLFW has already run on the main thread
+- `setActivationPolicy` requires no `unsafe` block in objc2 0.6+
 - `Accessory` policy hides the dock icon and menu bar entry; the window still renders and receives events
+- `new_unchecked()` is safe here when called before any GLFW init on the main thread
 
 ## Platform notes
 
@@ -409,7 +456,12 @@ app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
 - Window level: `NSWindow.setLevel(.floating)` handled by egui_overlay.
 - Spaces: overlay windows follow the active Space by default.
 - Retina: egui handles scale factor internally via `pixels_per_point`.
-- **Retina framebuffer overflow**: wgpu defaults `max_texture_dimension_2d` to 2048. Retina displays create framebuffers at 2x (e.g. 3420x2214). Set `device_descriptor.required_limits.max_texture_dimension_2d = 8192`. Metal supports 16384.
+- **Retina framebuffer overflow**: `egui_overlay::start()` creates `WgpuBackend` with `Limits::downlevel_defaults()`, which sets `max_texture_dimension_2d = 2048`. Retina framebuffers exceed this (e.g. 3388px wide). Must inline `start()` and mutate the limit before backend creation:
+  ```rust
+  let mut wgpu_config = WgpuConfig::default();
+  wgpu_config.device_descriptor.required_limits.max_texture_dimension_2d = 8192;
+  ```
+  Metal supports up to 16384.
 - `has_shadow` viewport option should be false to prevent ghosting artifacts on transparent windows.
 
 ### Linux X11

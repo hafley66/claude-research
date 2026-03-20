@@ -1,1 +1,1 @@
-20260319.3.cc-hud-state-refactor-widget-plan.md
+20260319.6.cc-hud-small-mode-polish.md

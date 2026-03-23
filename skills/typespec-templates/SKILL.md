@@ -257,6 +257,18 @@ model MyTemplate<
 
 See **typespec-functions** skill for full function coverage.
 
+## Common gotchas
+
+- **No multi-extends intersection**: `model Foo extends A & B {}` does not compile. `extends` accepts exactly one base model.
+- **`is` is not intersection**: `model Foo is Bar` spreads Bar's fields into Foo structurally. It does not produce a type-level intersection and cannot be used to compose multiple marker types.
+- **No partial generic application**: TypeSpec has no currying or partial application of generics. All type parameters must be supplied (or have defaults). The workaround is explicit aliases per concrete combination:
+  ```tsp
+  // Boundary<Input, Output, Mode> — can't partially apply just Mode
+  alias StreamO<T> = Boundary<{}, T, streamO>;
+  alias StreamI<T> = Boundary<T, {}, streamI>;
+  ```
+- **User-defined empty models as bounds**: Whether `model State {}` works as a generic constraint (`<T extends State>`) is unverified. The known-working constraints are built-in types (`object`, `Numeric`, `string`, etc.). Treat custom empty models as bounds as unconfirmed until tested.
+
 ## Verification
 - Run `tsp compile` to verify template resolution
 - Check template mapper in JS API

@@ -355,6 +355,110 @@ The fourth `StrokeKind` parameter controls whether the stroke is drawn outside, 
 
 Scale factor from screen space to radar space: `scale = RADIUS / max_screen_extent`. Clamp the transformed vector length to `RADIUS` for edge-clamping (dots at the radar boundary when targets are far away). This is the general pattern for any minimap or overview widget.
 
+## egui_plot: synchronized multi-chart dashboards
+
+### Linked crosshair across charts
+
+```rust
+let cursor_id = egui::Id::new("shared_cursor");
+// On every plot that should share the x-axis cursor:
+Plot::new("chart_1").link_cursor(cursor_id, true, false) // link_x=true, link_y=false
+```
+
+### Shared hover state via temp data
+
+Broadcast hover position from whichever chart the mouse is in, read in all charts (one-frame delay):
+
+```rust
+// Write (in the active chart's show callback):
+let x = pui.plot_from_screen(hover_pos).x;
+pui.ctx().data_mut(|d| d.insert_temp(hover_id, HoverState { x, source }));
+
+// Read (before rendering, available to all charts):
+let prev_hover: Option<HoverState> = ui.ctx().data(|d| d.get_temp(hover_id));
+```
+
+### Highlight VLine at hover position
+
+Draw in every chart's `show` callback for a faint vertical column tracking the cursor across all charts:
+
+```rust
+if let Some(hs) = &prev_hover {
+    pui.vline(VLine::new(hs.x).color(Color32::from_rgba_unmultiplied(200, 190, 165, 35)).width(1.0));
+}
+```
+
+### Stacked bar charts
+
+```rust
+let base = BarChart::new(bars_a).name("fresh");
+let mid  = BarChart::new(bars_b).name("read").stack_on(&[&base]);
+let top  = BarChart::new(bars_c).name("create").stack_on(&[&base, &mid]);
+pui.bar_chart(base);
+pui.bar_chart(mid);
+pui.bar_chart(top);
+```
+
+### Bidirectional bars (up/down)
+
+Positive height = up (input), negative height = down (output). Scale both directions:
+
+```rust
+Plot::new("bidi").include_y(max_up).include_y(-max_down)
+// Push bars with negative height for the downward series:
+bars.push(Bar::new(x, -output_value).width(bar_w));
+```
+
+### Coordinate conversion
+
+```rust
+let plot_pt = pui.plot_from_screen(screen_pos);  // screen -> plot coords
+let screen_pt = pui.screen_from_plot(plot_point); // plot -> screen coords
+// Hit-test: check if screen pos is within the plot's rendered bounds
+let bounds = pui.plot_bounds();
+let s_min = pui.screen_from_plot(PlotPoint::new(bounds.min()[0], bounds.min()[1]));
+let s_max = pui.screen_from_plot(PlotPoint::new(bounds.max()[0], bounds.max()[1]));
+let in_chart = Rect::from_two_pos(s_min, s_max).contains(hover_pos);
+```
+
+### Manual rect-based dashboard layout
+
+egui has no layout grid. Dashboard layout is manual rect math with percentage-based sizing:
+
+```rust
+let chart_h = available_h * 0.60;
+let total_h = available_h - chart_h - gap;
+let rect = Rect::from_min_size(pos2(x, y), vec2(width, chart_h));
+ui.allocate_new_ui(UiBuilder::new().max_rect(rect), |ui| { ... });
+```
+
+### Axis formatting
+
+```rust
+// Custom y-axis: return empty string for zero to avoid clutter
+.y_axis_formatter(move |v, _| {
+    if v.value < 1e-9 { String::new() } else { format!("${:.2}", v.value) }
+})
+// Relative time x-axis (minutes-from-epoch -> "3h", "2d", "now")
+.x_axis_formatter(move |v, _| {
+    let ago_min = now_min - v.value;
+    if ago_min < 0.5 { "now".into() }
+    else if ago_min < 60.0 { format!("{}m", ago_min.round() as i64) }
+    else { format!("{:.0}h", ago_min / 60.0) }
+})
+```
+
+### Stripped-down plot for HUD/overlay mode
+
+```rust
+Plot::new(id)
+    .show_axes([false, false]).show_grid(false)
+    .allow_zoom(false).allow_drag(false).allow_scroll(false)
+    .show_background(false).set_margin_fraction(Vec2::ZERO)
+    .label_formatter(|_, _| String::new())
+    .auto_bounds(Vec2b::new(true, true))
+```
+
 ## Notable widget crates
 
 | Crate | What |

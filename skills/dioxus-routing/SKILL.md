@@ -1,6 +1,6 @@
 ---
 name: dioxus-routing
-description: Dioxus routing deep dive -- Routable derive, nested routes, layouts, navigation, auth guards, redirects, data loading, WASM code splitting, platform differences. Trigger on dioxus routing, dioxus router, dioxus routes, dioxus navigation, dioxus nested routes, dioxus layout, dioxus auth guard, dioxus redirect.
+description: Dioxus routing deep dive -- Routable derive, nested routes, layouts, navigation, auth guards, redirects, data loading, WASM code splitting, platform differences, route transitions. Trigger on dioxus routing, dioxus router, dioxus routes, dioxus navigation, dioxus nested routes, dioxus layout, dioxus auth guard, dioxus redirect.
 license: MIT
 metadata:
   audience: developers
@@ -9,7 +9,7 @@ metadata:
 
 ## What this covers
 
-Complete Dioxus routing reference. Type-safe enum-based routing with compile-time checked links and navigation.
+Complete Dioxus routing reference. Type-safe enum-based routing with compile-time checked links and navigation. Updated March 2026 for Dioxus 0.7.3 stable.
 
 ## Routable Derive Macro
 
@@ -37,7 +37,7 @@ Convention: variant name maps to a component function of the same name. Override
 | `#[layout(LayoutFn)]` | Wraps subsequent variants in layout component |
 | `#[end_layout]` | Closes layout scope |
 | `#[redirect("/path", \|params\| Route::Target {})]` | Redirect |
-| `#[child]` | Nested child router enum |
+| `#[child]` | Nested child router enum (for modular routing with separate Routable enums) |
 
 ### Match order
 
@@ -76,13 +76,15 @@ Search { query: String, page: i32 },
 ```
 URL: `/search?query=rust&page=2`
 
+Note: Query params are NOT part of the enum matching for route selection; they are accessed at runtime.
+
 ### Hash fragments
 After `#:`:
 ```rust
 #[route("/docs#:section")]
 Docs { section: String },
 ```
-Cannot appear inside `#[nest]` blocks.
+Cannot appear inside `#[nest]` blocks. Managed through `dioxus-history` state.
 
 ## Link Component
 
@@ -113,6 +115,29 @@ Dynamic segments in nests propagate to children:
     UserPosts { user_id: usize },  // component receives user_id
 #[end_nest]
 ```
+
+### Modular routing with #[child]
+
+Compose separate `Routable` enums for large apps:
+```rust
+#[derive(Routable)]
+enum AdminRoute {
+    #[route("/dashboard")]
+    AdminDashboard {},
+    #[route("/users")]
+    AdminUsers {},
+}
+
+#[derive(Routable)]
+enum Route {
+    #[route("/")]
+    Home {},
+    #[child("/admin")]
+    Admin { child: AdminRoute },
+}
+```
+
+Confirmed working by maintainer (issue #5046, Dec 2025) but poorly documented.
 
 ### Layouts
 
@@ -193,7 +218,7 @@ let current = use_route::<Route>();
 
 ## Auth Guards
 
-No built-in route guard API. Pattern: check auth in a layout component:
+No built-in route guard API (issue #1728, open). Pattern: check auth in a layout component:
 
 ```rust
 #[component]
@@ -243,7 +268,17 @@ Router::<Route> {
 
 ## Data Loading
 
-No equivalent to React Router loaders. Data loading happens in components:
+No equivalent to React Router loaders/actions. Data loading is hook-based and component-scoped, not route-scoped:
+
+### use_loader (new in 0.7, isomorphic)
+```rust
+#[component]
+fn BlogPost(id: usize) -> Element {
+    let post = use_loader(move || get_post(id))?;
+    // Does not re-suspend on re-run (unlike use_server_future)
+    rsx! { h1 { "{post.title}" } }
+}
+```
 
 ### use_server_future (fullstack, SSR-aware)
 ```rust
@@ -266,20 +301,9 @@ let user = use_resource(move || async move {
 });
 ```
 
-## WASM Bundle Splitting (0.7)
+## Route Transitions (dioxus-motion)
 
-Route-based, automatic once enabled:
-```toml
-[dependencies]
-dioxus = { version = "0.7", features = ["router", "wasm-split"] }
-```
-```bash
-dx build --experimental-wasm-split
-```
-
-## Route Transitions
-
-Core router has no built-in transitions. Community library `dioxus-motion`:
+Community library `dioxus-motion` v0.3.1:
 ```rust
 #[derive(Routable, MotionTransitions, Clone, PartialEq)]
 enum Route {
@@ -295,6 +319,28 @@ enum Route {
 rsx! { AnimatedOutlet::<Route> {} }
 ```
 Built-in: `Fade`, `ZoomIn`, `SlideLeft`, `SlideRight`, `SlideUp`, `SlideDown`.
+
+Requires `transitions` feature on `dioxus-motion`.
+
+## WASM Bundle Splitting (0.7)
+
+Route-based code splitting, unique among Rust WASM frameworks (Leptos/Yew lack equivalent):
+
+```toml
+[dependencies]
+dioxus-router = { version = "0.7", features = ["wasm-split"] }
+```
+```bash
+dx build --wasm-split
+```
+
+Uses a custom `wasm-splitter` tool post-build. Trims module portions, reconnects via export/import maps at `#[wasm_split]` boundaries. Includes data section splitting and shared chunk extraction.
+
+**Known issues:** Issue #4514 (splitter panic) fixed in PR #4584 (Aug 2025) by ensuring LTO and debug info enabled. Still requires explicit opt-in. No published performance benchmarks or real-world production usage reports as of early 2026.
+
+## Hash Router (new in 0.7)
+
+`#`-based URLs for static hosting deployment without server-side URL rewriting. Enabled in `dioxus-web` configuration.
 
 ## Error Boundaries
 
@@ -318,9 +364,24 @@ In fullstack: `commit_error_status` sets HTTP status code (e.g., 500) while rend
 
 | Platform | History Backend | URL Bar |
 |---|---|---|
-| Web | Browser History API | Yes |
+| Web | Browser History API (WebHistory) | Yes |
 | Desktop | In-memory (MemoryHistory) | No |
 | Mobile | In-memory | No |
 | SSR | Route from HTTP request URL | N/A |
+| Liveview | LiveviewHistory (server+websocket) | Yes |
 
 Same `Route` enum and components work across all platforms. The router abstracts the history provider.
+
+## Known Issues and Community Pain Points
+
+| Issue | Status | Summary |
+|---|---|---|
+| #5046 Nested Routable Enums | Open | `#[child]` exists but poorly documented |
+| #3981 Parallel Routes | Open | Next.js-style parallel route segments |
+| #1728 Protected/Conditional Routes | Open | No native route guard; must use layout pattern |
+| #3986 Same route, different params | Open | Route doesn't reload when pushed with different parameters |
+| #2368 Navigation state | Discussion | No way to know if route was reached via Link vs back button |
+
+## 0.8 Outlook
+
+No routing-specific items on the 0.8 roadmap. Routing is considered stable. 0.8 focuses on native platform APIs, Swift/Kotlin FFI, and DX tooling.

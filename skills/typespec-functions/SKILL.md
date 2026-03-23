@@ -273,6 +273,24 @@ JS functions returning `undefined` are accepted for TypeSpec `void` return type.
 | JS binding | `$functions` export | `$decoratorName` export | N/A |
 | First-class value | Yes (assignable to const) | No | No |
 
+## Placement constraints
+
+`fn` declarations are **namespace-level only**. They cannot appear inside model bodies or interfaces. Only `op` can be a member of an interface; models cannot contain ops either.
+
+```tsp
+// OK
+namespace MyLib;
+extern fn transform(m: Reflection.Model): Reflection.Model;
+
+// ERROR — fn is not a valid model or interface member
+model Foo {
+  extern fn helper(): string;  // invalid
+}
+interface Bar {
+  extern fn helper(): string;  // invalid — use op here
+}
+```
+
 ## Implementation notes
 - Function results are never cached. Wrap in template aliases for caching.
 - Functions may have side effects (no purity guarantee).

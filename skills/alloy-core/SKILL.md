@@ -319,10 +319,47 @@ Protocol-agnostic: HTTP `Endpoint`, gRPC handlers, CLI commands, event handlers 
 | `<Switch>` | Multi-branch conditional |
 | `<Block>` | Indented block with braces |
 | `<Indent>` / `<List>` | Layout helpers |
-| `<AppendFile>` | Append to existing file |
+| `<AppendFile>` | Append content before end sigils (see below) |
 | `<CopyFile>` | Copy file to output |
 | `<TemplateFile>` | Variable substitution in template |
-| `<UpdateFile>` | Read-modify-write |
+| `<UpdateFile>` | Read-modify-write (see below) |
+
+### AppendFile vs UpdateFile (confirmed @alloy-js/core@0.23.0-dev.12)
+
+Both are from `@alloy-js/core/components`. They are NOT equivalent.
+
+**AppendFile** -- accumulates, does not replace:
+- Appends content inside sigil regions: any line containing `alloy-{regionId}-start` / `alloy-{regionId}-end` (any comment style works)
+- On re-emit, content already between sigils is PRESERVED; new content is added below it
+- Uses `<AppendRegion>` marker component to target content to a named region
+- Use case: accumulating entries (route registrations, import lists) across multiple runs
+
+**UpdateFile** -- whole-file read-modify-write:
+- Callback signature: `(currentContents: string | null) => Children`
+- Returns `Children` (not just string) -- can mix raw strings with live JSX nodes inside the callback
+- File doesn't exist: receives `null`; optional `defaultContent` / `defaultContentPath` props supply initial content
+- No region granularity built in -- full file control only
+
+**Critical:** there is no built-in component for replace-region semantics. `AppendFile` accumulates; `UpdateFile` owns the whole file. To replace content between sigils (auto zones), wrap `UpdateFile` manually -- see the `ReplaceFile` + `AutoZone` pattern in the typespec-custom-emitters skill.
+
+## Key public exports from @alloy-js/core
+
+All re-exported from the main `@alloy-js/core` entry point (not subpath imports):
+- `isComponentCreator(item, component)` -- checks if a JSX child is a specific component creator
+- `childrenArray(fn, options)` -- resolves children into a flat array (useful for extracting marker children)
+- `emitDiagnostic(input)` -- emit build diagnostics
+- `createFileResource(path)` -- reactive file reader, returns `Resource<string>`
+- `SourceDirectoryContext` -- context for the current source directory
+- `SourceFile` -- component for file output
+
+### Testing exports
+
+From `@alloy-js/core/testing`:
+- `d` tagged template -- dedent helper
+- `toRenderToAsync` / `toRenderTo` -- vitest matchers
+- `renderToString` -- non-matcher render helper
+
+**Gotcha:** `@alloy-js/core/testing/matchers` is TYPES ONLY (just `vitest.d.ts`). Import `@alloy-js/core/testing` to get the actual matchers registered via side-effect (`extend-expect.js`). Do not import the `matchers` subpath expecting runtime behavior.
 
 ## String template API (no JSX)
 
@@ -374,6 +411,7 @@ Common errors:
 
 ## Status
 Pre-beta. APIs will change. Languages: TypeScript, C#, Java, Python, Go, JSON, Markdown. No Rust package yet.
+File primitive behavior confirmed against @alloy-js/core@0.23.0-dev.12.
 
 ## Example prompts
 "Create an Alloy output tree that generates TypeScript interfaces"

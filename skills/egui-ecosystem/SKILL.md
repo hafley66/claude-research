@@ -22,6 +22,16 @@ Third-party crates that extend egui. These are all pure Rust UI code -- they add
 | `egui_virtual_list` | Virtual scroll, varying row heights | hello_egui |
 | `egui_infinite_scroll` | Infinite scroll | hello_egui |
 
+## Tables & Data Grids
+
+| Crate | What | Links |
+|---|---|---|
+| `egui_table` | Virtual-scroll table, sticky cols, grouped headers, column resize | [rerun-io/egui_table](https://github.com/rerun-io/egui_table), by emilk, ~715K downloads |
+| `egui_extras::TableBuilder` | Built-in basic table | Ships with `egui_extras`, no virtual scroll |
+| `egui-data-table` | Generic `DataTable<T>` with sorting, selection | |
+
+See `egui-table-core` for API and `egui-table-patterns` for selection, expand/collapse, pagination, action buttons.
+
 ## Visualization
 
 | Crate | What | Links |
@@ -77,6 +87,15 @@ See `egui-advanced-patterns` skill for animation API details.
 | raw winit+wgpu+egui | No crate -- manual setup, full control | See `egui-overlay-windows` skill |
 
 See `egui-overlay-windows` skill for overlay details. The raw winit+wgpu approach avoids the GLFW dependency of `egui_overlay` and gives direct NSWindow access for transparency configuration. Requires more boilerplate but provides the most control for custom overlay geometry (border frames, shaped windows).
+
+## Terminal Emulation
+
+| Crate | What | Links |
+|---|---|---|
+| `egui_term` | Full terminal widget (PTY + alacritty_terminal + egui painter) | [Harzu/egui_term](https://github.com/Harzu/egui_term), egui 0.33 |
+| `terminput-egui` | Input adapter only (egui keys -> terminal sequences) | [aschey/terminput](https://github.com/aschey/terminput) |
+
+See `egui-terminal` skill for setup, multi-tab, split pane, and rendering pipeline.
 
 ## Infrastructure
 

@@ -252,6 +252,14 @@ function getSqlType(type: Type): string {
 }
 ```
 
+## Cross-transport type mapping
+
+Type mappings extend across transports, not just across languages. The same TypeSpec operation parameter maps differently per transport:
+- `@path org_id: int64` in HTTP -> `Path<i64>` extraction in axum, `msg.extract("org_id")` in WS
+- Resolved types (no decorator, e.g., `UserSession`) -> `FromRequestParts` in axum, `from_ws_connection()` in WS
+
+Transport is another layer axis alongside language. See **typespec-emitter-framework** skill for the multi-transport endpoint pattern and **typespec-rest** skill for `getHttpOperation()` API.
+
 ## Example prompts
 "Define User model with uuid id, string name, int32 age"
 "Create patch input type with optional + nullable fields"

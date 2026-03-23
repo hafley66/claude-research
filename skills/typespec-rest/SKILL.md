@@ -106,6 +106,32 @@ rateLimit: int32;
 etag: string;
 ```
 
+## Programmatic API for emitters
+
+Emitters read HTTP param classification via `getHttpOperation()` from `@typespec/http`:
+
+```typescript
+import { getHttpOperation } from "@typespec/http";
+
+const [httpOp, diagnostics] = getHttpOperation(program, operation);
+
+// httpOp.parameters.parameters is HttpOperationParameter[]
+// Each has .type: "path" | "query" | "header" | "cookie" (discriminated union)
+for (const param of httpOp.parameters.parameters) {
+  // param.type is the discriminant -- no string matching needed
+  // param.param is the underlying ModelProperty
+}
+
+// Body is separate
+const body = httpOp.parameters.body; // HttpOperationBody | undefined
+
+// Parameters with NO HTTP decorator are not in either list.
+// These are "resolved types" -- see typespec-emitter-framework skill
+// for how resolved types carry per-transport extraction logic.
+```
+
+See also: **typespec-custom-emitters** (imperative emitter patterns), **typespec-emitter-framework** (JSX/Alloy emitter patterns with transport bindings).
+
 ## Example prompts
 "Create a REST API for a pet store with CRUD operations"
 "Add OAuth2 authentication to the API namespace"

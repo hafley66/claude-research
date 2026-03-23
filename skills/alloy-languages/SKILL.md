@@ -32,6 +32,10 @@ Use when working with Alloy language packages, building language-specific code g
 
 No `@alloy-js/rust` exists yet.
 
+### TypeSpec emitters: use the emitter-framework layer, not raw Alloy
+
+When building a **TypeSpec emitter** targeting TypeScript, C#, or Python, prefer `@typespec/emitter-framework/typescript` (etc.) over the raw Alloy packages above. The emitter-framework components accept TypeSpec `Type` objects directly (`TypeExpression`, `InterfaceDeclaration`, `EnumDeclaration`, etc.) and handle all type mapping internally. Drop to raw `@alloy-js/*` components only for languages without a built-in emitter-framework target (Go, Rust) or for non-TypeSpec codegen. See **typespec-emitter-framework** skill.
+
 ## Language package anatomy
 
 Every language package follows the same structure. The pattern is consistent across TS, Go, C#, etc.
@@ -310,6 +314,8 @@ Things learned from reading the Alloy core and language package source that crea
 **Colocated model placement.** Models live as deep as possible in the file tree, collocated with the code that primarily owns them. Hoist to the common ancestor only when a model is referenced across module boundaries. No separate `models/` folder. Alloy's refkey system resolves `use crate::` paths regardless of file location.
 
 **Formatting: ignore prettier, use rustfmt.** Alloy's formatting intrinsics (group, indent, hardline) use prettier doc IR under the hood. Do not fight this for Rust output. Emit syntactically valid Rust without caring about style, pipe through `rustfmt` as a post-processing step. Do not invest time in getting Alloy's formatting to match Rust conventions.
+
+**Stable barrel + auto hoisting architecture.** Types physically live wherever the emitter's hoisting logic places them (internal, freely movable). One root-level barrel file re-exports all public types, giving manual code a stable import path that survives topology changes. Git diff on the barrel shows when the reference graph changed (type moved). This works in tandem with the auto zone pattern (see typespec-custom-emitters skill): auto files hold generated types, auto zones regenerate declared regions inside manual files, and the barrel makes all of it importable from one stable path.
 
 ## Example prompts
 "Generate TypeScript interfaces using Alloy components"

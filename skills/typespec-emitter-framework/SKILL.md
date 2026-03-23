@@ -26,18 +26,24 @@ Use when building TypeSpec emitters with the new Alloy-based emitter framework (
 ## Architecture
 
 ```
-┌─────────────────────────────────┐
-│  TypeSpec Emitter Framework     │  @typespec/emitter-framework
-│  (TypeSpec-aware components,    │
-│   useTsp(), writeOutput)        │
-├─────────────────────────────────┤
-│  Alloy Language Components      │  @alloy-js/typescript, etc.
-│  (ts.InterfaceDeclaration, etc.)│
-├─────────────────────────────────┤
-│  Alloy Core                     │  @alloy-js/core
-│  (Output, SourceFile, render,   │
-│   refkey, symbols, scopes)      │
-└─────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  TypeSpec Emitter Framework                      │  @typespec/emitter-framework
+│  (TypeSpec-aware components, useTsp(),           │
+│   writeOutput, type-connector)                   │
+│                                                  │
+│  Built-in targets (accept TypeSpec Type objects):│
+│    /typescript  -- TypeExpression, Interface...  │
+│    /csharp      -- C# equivalents                │
+│    /python      -- Python equivalents            │
+├──────────────────────────────────────────────────┤
+│  Alloy Language Components                       │  @alloy-js/typescript, etc.
+│  (ts.InterfaceDeclaration, etc.)                 │
+│  (used directly only for Rust/Go or custom work) │
+├──────────────────────────────────────────────────┤
+│  Alloy Core                                      │  @alloy-js/core
+│  (Output, SourceFile, render,                    │
+│   refkey, symbols, scopes)                       │
+└──────────────────────────────────────────────────┘
 ```
 
 ## Core pattern: JSX-based $onEmit
@@ -176,13 +182,94 @@ function EmitModel({ model }) {
 }
 ```
 
-## Extending to non-TypeScript targets
+## Built-in language targets (v0.17.0+)
 
-The framework currently has deep TypeScript support. For other languages:
+`@typespec/emitter-framework` ships ready-made TypeSpec-aware components for TypeScript, C#, and Python. These are NOT just raw Alloy language components -- they accept TypeSpec `Type` objects directly and handle all type mapping internally.
 
-1. Use the corresponding Alloy language package (@alloy-js/csharp, @alloy-js/python, etc.)
+### TypeScript target (`@typespec/emitter-framework/typescript`)
+
+Do NOT write your own scalar → TS primitive map. `TypeExpression` already does this.
+
+| Component | TypeSpec input | Output |
+|-----------|---------------|--------|
+| `TypeExpression` | any TypeSpec `Type` | correct TS type expression (scalars, arrays, records, models, enums, unions, optionals) |
+| `InterfaceDeclaration` | `Model` | TS interface |
+| `EnumDeclaration` | `Enum` | TS enum |
+| `TypeAliasDeclaration` | model/union | type alias |
+| `InterfaceMember` | `ModelProperty` | interface property |
+| `InterfaceMethod` | `Operation` | method signature |
+| `FunctionDeclaration` | `Operation` | function |
+| `ArrowFunction` | `Operation` | arrow function |
+| `FunctionExpression` | `Operation` | function expression |
+| `ArrayExpression` | — | array literal |
+| `RecordExpression` | — | record/object literal |
+| `TypeTransform` | — | type transformation helpers |
+| `StaticSerializers` | — | serializer output |
+| union support | `Union` | union type expression |
+
+```tsx
+import { TypeExpression, InterfaceDeclaration } from "@typespec/emitter-framework/typescript";
+
+// No manual type mapping needed:
+function ModelInterface({ type }: { type: Model }) {
+  return (
+    <InterfaceDeclaration type={type}>
+      {Array.from(type.properties.values()).map(p => (
+        <InterfaceMember name={p.name} type={p.type} />
+        // TypeExpression handles p.type internally
+      ))}
+    </InterfaceDeclaration>
+  );
+}
+```
+
+### C# and Python targets
+
+Similar component sets exist under the `csharp/` and `python/` paths. Check the package for current component availability.
+
+### core/ utilities
+
+| Export | Purpose |
+|--------|---------|
+| `type-connector` | Connects TypeSpec types to Alloy refkeys |
+| `write-output` | Disk output (same as top-level `writeOutput`) |
+| `transport-name-policy` | Naming conventions for transport layer |
+
+## Transport binding pattern (multi-transport endpoints)
+
+For emitters targeting multiple transports (HTTP + WS + gRPC), the same TypeSpec operation emits differently per transport. The emitter reads `getHttpOperation()` from `@typespec/http` to classify params, then each transport binding decides extraction syntax.
+
+### Param classification
+1. **Sourced params** -- have `@path`/`@query`/`@body`/`@header`. Each transport maps differently:
+   - axum HTTP: `@path org_id` becomes `Path(org_id): Path<i64>`
+   - WebSocket: all sourced params collapse to `msg.extract("org_id")` (message body)
+   - gRPC: all params are protobuf message fields
+
+2. **Resolved params** -- no HTTP decorator, type is a model (e.g., `UserSession`). The type carries its own per-transport extraction logic, emitted once on the type's file:
+   - axum: `FromRequestParts` impl
+   - WS: `Type::from_ws_connection(conn)` method
+   - No middleware layer -- the type IS the computation
+
+### Endpoint file structure (ReplaceFile + AutoZone)
+Each endpoint is one file with N auto zones (one per transport) + 1 manual zone (transport-agnostic impl). All transport bindings delegate to the same manual function. See **typespec-custom-emitters** skill for ReplaceFile/AutoZone pattern.
+
+### Denormalized discriminants
+Avoid stringly-typed dispatch. TypeSpec already uses separate decorators (`@path`, `@query`) rather than `@source("path")`. The emitter should produce typed variants, not strings checked with `===` downstream.
+
+## What still requires custom work
+
+- Component scaffolding for frameworks (React hooks, Dioxus signals, etc.)
+- Auto/manual zone generation (CodegenPair patterns)
+- Reducer/event dispatch wiring
+- Language targets not covered: **Rust, Go** -- no built-in targets exist for these
+
+## Extending to unsupported targets (Rust, Go)
+
+For languages without built-in emitter-framework targets:
+
+1. Use the corresponding Alloy language package (@alloy-js/go, etc.)
 2. Write your own TypeSpec-to-language mapping components
-3. The framework's Output and useTsp() work with any Alloy language
+3. The framework's `Output` and `useTsp()` work with any Alloy language
 
 ```tsx
 import * as py from "@alloy-js/python";

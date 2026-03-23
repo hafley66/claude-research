@@ -311,6 +311,15 @@ alias UserRead = FilterVisibility<User, #{ any: #[Lifecycle.Read] }>;
 
 The `FilterVisibility` template wraps an internal function and caches results per unique input. See **typespec-functions** skill for creating custom function-based transforms.
 
+## Transport-agnostic input/output
+
+Input/output separation is orthogonal to transport. The same operation's input fields get placed differently per transport:
+- HTTP: fields split across `@path`, `@query`, `@body`, `@header` (placement decorators)
+- WebSocket: all input fields are message body
+- gRPC: all input fields are protobuf message fields
+
+Placement is a transport concern, not a type concern. TypeSpec defines the shape; the emitter decides where each field goes per target. See **typespec-emitter-framework** skill for the transport binding pattern and **typespec-rest** skill for `getHttpOperation()` programmatic API.
+
 ## Verification
 - Run `tsp compile` to verify visibility decorators
 - Check input types exclude read-only fields

@@ -259,6 +259,54 @@ if (diagnostics.getErrors().length > 0) {
 }
 ```
 
+## Reading HTTP parameter classification
+
+Use `getHttpOperation()` from `@typespec/http` to get classified params instead of manual decorator inspection:
+
+```typescript
+import { getHttpOperation } from "@typespec/http";
+
+function emitEndpoint(program: Program, op: Operation) {
+  const [httpOp] = getHttpOperation(program, op);
+
+  // Sourced params: have @path/@query/@header/@cookie
+  for (const param of httpOp.parameters.parameters) {
+    switch (param.type) {
+      case "path":  /* Path<T> in axum, msg.extract() in WS */ break;
+      case "query": /* Query<T> in axum, msg.extract() in WS */ break;
+      case "header": /* header extraction */ break;
+    }
+  }
+
+  // Body param
+  const body = httpOp.parameters.body;
+
+  // Resolved params: operation params NOT in httpOp.parameters at all.
+  // These are model types (UserSession, DbPool) with no HTTP decorator.
+  // They carry their own per-transport extraction logic (e.g., axum
+  // FromRequestParts impl) emitted once on the type's own file.
+  // See typespec-emitter-framework skill for the transport binding pattern.
+}
+```
+
+Key insight: all boundary operations are RPC with input/output. HTTP placement (`@path`, `@query`, `@body`) is one transport's opinion about where fields go. In WebSocket, all sourced params collapse into the message body. TypeSpec IS the neutral representation.
+
+## Mixed auto/manual file output (ReplaceFile + AutoZone pattern)
+
+For emitters that must preserve user-edited code while still regenerating declared regions, `UpdateFile` alone is not enough (it owns the whole file) and `AppendFile` only accumulates. The pattern built on top of `UpdateFile`:
+
+- **`ReplaceFile`** wraps `UpdateFile`. In the callback it parses the file at sigil boundaries (`// alloy-{id}-start` / `// alloy-{id}-end`) into alternating preserved-string / replace-region chunks.
+- **`AutoZone`** is a marker component (analogous to `AppendRegion`) whose children are live JSX nodes -- full Alloy component composition (TspInterface, refkeys, binder) works inside.
+- `ReplaceFile` extracts `AutoZone` children via `isComponentCreator` + `childrenArray`, then interleaves preserved strings with the live JSX children.
+- Result: auto zones get regenerated on every run; manual code outside sigils is untouched.
+
+Three emission target types for a given file:
+1. **Auto file** (`_auto.tsx`) -- fully regenerated, no manual edits expected
+2. **Auto zone** -- sigil region inside a manual file, regenerated via `ReplaceFile`
+3. **Manual file** -- untouched by the emitter, user-owned
+
+This does NOT require opting out of Alloy; JSX is live inside `AutoZone`.
+
 ## Example prompts
 "Create custom emitter to output enums as C#/Java/TypeScript"
 "Generate markdown tables from model properties"

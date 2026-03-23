@@ -126,6 +126,12 @@ model User {
 - Namespace organization for large projects
 - Template reuse for common patterns
 
+## Common gotchas
+
+- **Single extends only**: `model Foo extends A & B {}` does NOT compile. TypeSpec has no intersection in `extends`. Only one base model is allowed.
+- **`is` is structural spread, not intersection**: `model Foo is Bar` copies Bar's shape into Foo; it does not create a type-level intersection. You cannot use `is` to compose multiple marker types.
+- **`Record<K, V>` signature unclear**: TypeSpec exposes `Record<string>` (value type only), not the two-argument `Record<K, V>` form. Treat the key type as fixed to string unless you verify the current stdlib signature.
+
 ## Verification
 - Run `tsp compile` to verify no errors
 - Check decorator application with `tsp show`

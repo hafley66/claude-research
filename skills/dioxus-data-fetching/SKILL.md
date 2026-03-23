@@ -1,6 +1,6 @@
 ---
 name: dioxus-data-fetching
-description: Dioxus data fetching, APIs, WebSockets -- use_resource vs React Query/RTKQ, server functions, use_websocket, coroutines, streaming, polling, state sync, dioxus-query crate. Trigger on dioxus api, dioxus fetch, dioxus websocket, dioxus server function, dioxus data, dioxus http, dioxus query, dioxus streaming, dioxus polling.
+description: Dioxus data fetching, APIs, WebSockets -- use_resource vs React Query/RTKQ, server functions, use_websocket, coroutines, streaming, polling, state sync, dioxus-query crate, dioxus-provider. Trigger on dioxus api, dioxus fetch, dioxus websocket, dioxus server function, dioxus data, dioxus http, dioxus query, dioxus streaming, dioxus polling.
 license: MIT
 metadata:
   audience: developers
@@ -9,7 +9,7 @@ metadata:
 
 ## What this covers
 
-Data fetching and real-time communication in Dioxus, mapped to React Query/RTK Query/RxJS patterns for developers coming from that world.
+Data fetching and real-time communication in Dioxus, mapped to React Query/RTK Query/RxJS patterns for developers coming from that world. Updated March 2026 for Dioxus 0.7.3 stable.
 
 ## use_resource -- Core Data Fetching
 
@@ -26,7 +26,11 @@ match &*dog.read() {
 }
 ```
 
-Auto-reruns when any signal read inside the closure changes (reactive dependencies).
+Auto-reruns when any signal read inside the closure changes (reactive dependencies). Integrates with Suspense and Streaming HTML. No caching, no dedup -- just a reactive async effect. Closer to SolidJS `createResource` than React Query.
+
+### use_loader (new in 0.7)
+
+Returns `Result<Loader<T>, Loading>`. Integrates with Error Boundaries and Suspense. Unlike `use_server_future`, does not re-suspend the page on re-run. Designed for isomorphic (CSR + SSR) data loading.
 
 ### vs React Query / RTK Query
 
@@ -41,11 +45,20 @@ Auto-reruns when any signal read inside the closure changes (reactive dependenci
 | Optimistic updates | `onMutate` callback | Write signal before await, roll back on error |
 | Reactive deps | `queryKey` array | Auto-tracked signal reads |
 
-`use_resource` is closer to SolidJS's `createResource` than to React Query. It is a reactive async effect, not a cache manager.
-
 ## dioxus-query -- The React Query Gap Filler
 
-github.com/marc2332/dioxus-query -- v0.9.2, supports Dioxus 0.7. Inspired by TanStack Query:
+github.com/marc2332/dioxus-query -- **v0.9.2** (Dec 2025), 131 stars, ~23k downloads. Actively maintained, supports Dioxus 0.7.
+
+### Version history
+
+| Version | Date | Significance |
+|---------|------|-------------|
+| v0.8.0 | Jun 2025 | Complete rework: type erasure via `Any` (no more `QueryValue` trait), Suspense integration, query enable/disable, stale cleanup, relaxed trait bounds |
+| v0.8.1 | Jun 2025 | WASM/suspense fix |
+| v0.9.0 | Dec 2025 | Dioxus 0.7 support |
+| v0.9.2 | Dec 2025 | Data race fix in use_query/use_mutation |
+
+### API
 
 ```rust
 #[derive(Clone, PartialEq, Hash, Eq)]
@@ -67,7 +80,42 @@ let user = use_query(Query::new(id, GetUser(Captured(db_client))));
 QueriesStorage::<GetUser>::invalidate_matching(user_id).await;
 ```
 
-Features: in-memory cache, manual invalidation, equality-based invalidation, concurrent queries, background re-execution. No window-focus invalidation yet.
+### Features
+- In-memory caching (opt-in)
+- Manual + equality-based invalidation
+- Background interval re-execution
+- Window/tab focus invalidation
+- Concurrent queries
+- `use_mutation` hook
+- `Captured<T>` for dependency injection
+- Renderer-agnostic
+
+### Gaps vs TanStack Query
+- No query devtools
+- No garbage collection of inactive queries
+- No structural sharing
+- No placeholder data
+- No prefetching hooks
+- No infinite query primitives
+- No SSR hydration of query cache (fullstack integration in progress: issues #45, #46)
+
+## dioxus-provider -- Riverpod-Inspired Alternative
+
+github.com/wheregmis/dioxus-provider -- **v0.2.1** (Oct 2025), ~2,600 downloads. Pre-1.0, unstable API.
+
+Inspired by Flutter's Riverpod, not TanStack Query. Different paradigm:
+
+```rust
+#[provider]
+async fn get_user(id: UserId) -> Result<User, AppError> { /* ... */ }
+
+// In component:
+let user = use_provider(get_user(), user_id);
+```
+
+Features: SWR via `stale_time`, TTL cache via `cache_time`, background refresh via `refresh_interval`, composable providers (parallel execution), optimistic updates with rollback, parametrized queries with per-parameter caching.
+
+Assessment: More opinionated, Flutter-influenced. Very low adoption (55 recent downloads). Worth watching, not production-ready.
 
 ## HTTP Client
 
@@ -93,6 +141,8 @@ let on_submit = move |_| async move {
 };
 ```
 
+dioxus-query provides `use_mutation` for structured mutation handling.
+
 ## Server Functions
 
 ### Basic
@@ -104,7 +154,7 @@ async fn get_todos() -> Result<Vec<Todo>, ServerFnError> {
 }
 ```
 
-### 0.7 HTTP method attributes
+### 0.7 Rocket-inspired HTTP method attributes
 ```rust
 #[get("/api/todos")]
 async fn get_todos() -> Result<Vec<Todo>> { /* ... */ }
@@ -112,6 +162,10 @@ async fn get_todos() -> Result<Vec<Todo>> { /* ... */ }
 #[post("/api/todos")]
 async fn create_todo(text: String) -> Result<Todo> { /* ... */ }
 ```
+
+### New in 0.7
+- Full Axum handler compatibility
+- New types: `Websocket<T>`, `ServerEvents<T>`, `Streaming<T>`, `Form<T>`, `MultipartFormData`, `FileStream`
 
 ### Extractors
 ```rust
@@ -270,13 +324,19 @@ QueriesStorage::<GetUser>::invalidate_matching(user_id).await;
 
 | JS Concept | Dioxus Equivalent |
 |---|---|
-| `useQuery` / `createApi` | `use_resource` (basic) or `dioxus-query` (cached) |
-| `useMutation` | Async event handlers + server functions |
+| `useQuery` / `createApi` | `use_resource` (basic) or `dioxus-query` (cached) or `dioxus-provider` (SWR) |
+| `useMutation` | Async event handlers, server functions, or `dioxus-query::use_mutation` |
 | `invalidateQueries` | `resource.restart()`, signal bump, or `QueriesStorage::invalidate_matching` |
-| `staleTime` / `refetchInterval` | `use_future` with `sleep` loop |
+| `staleTime` / `refetchInterval` | `use_future` with `sleep` loop, or `dioxus-provider` `stale_time`/`refresh_interval` |
 | tRPC procedures | `#[server]` / `#[get]` / `#[post]` functions |
 | RxJS `webSocket()` | `use_websocket` (0.7) or `use_coroutine` + channel |
 | socket.io reconnect | Manual loop with backoff in `use_future` |
 | Redux/MobX stores | `use_signal` + `#[derive(Store)]` |
 | React Query DevTools | Nothing equivalent yet |
 | SSE | `TextStream` / `Streaming<T>` from server functions |
+| Riverpod providers | `dioxus-provider` `#[provider]` macro |
+| Loader (React Router) | `use_loader` (0.7, isomorphic) or `use_server_future` (SSR) |
+
+## 0.8 Outlook
+
+No changes planned for state management or fullstack data fetching in 0.8. The 0.7 primitives are considered stable. The main gap being actively worked on is dioxus-query's fullstack integration (server function awareness, SSR hydration of query cache).

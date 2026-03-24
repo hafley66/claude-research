@@ -139,6 +139,48 @@ Well-covered: dioxus-free-icons (103k dl), lucide-dioxus (29k), dxc-icons (1.9k)
 - dioxus_style (224 dl) -- compile-time scoped CSS/SCSS
 - First-party primitives modeled after shadcn/Radix via `dx components add`
 
+## Utility Hooks (react-use / VueUse equivalent)
+
+No single react-use or VueUse equivalent exists. The ecosystem is scattered across micro-crates of varying maintenance quality.
+
+### Multi-hook collections
+
+| Crate | What | Status |
+|---|---|---|
+| **dioxus-sdk** (official, DioxusLabs/sdk) | `use_channel`, `use_interval`, `use_persistent`, `use_geolocation`, clipboard, notifications | Active. Platform-aware (desktop clipboard needs x11 on Linux). Covers platform APIs, not DOM utility hooks. |
+| **dioxus-hooks-plus** | `use_hover()`, `use_session_storage()` | Community, MPL-2.0 |
+
+### Single-purpose micro-crates
+
+| Hook need | Crate | Notes |
+|---|---|---|
+| window size | `dioxus-use-window` | `use_window_size()`, 0.7 compat |
+| clipboard | `dioxus-use-clipboard` | dioxus-community org |
+| localStorage | `dioxus-use-storage` | Also `dioxus-local-storage`, `dioxus_storage` (three competing crates) |
+| resize observer | `dioxus-resize-observer` | dioxus-community |
+| cursor position | `dioxus-use-cursor` | |
+| dialog/modal | `dioxus-use-dialog` | |
+| JS interop | `dioxus-use-js` | Macro for binding JS functions with compile-time type checking |
+| websocket | `dioxus-websocket-hooks` | |
+
+### What doesn't exist as a crate (hand-roll from web_sys)
+
+- `use_debounce` / `use_throttle` -- use coroutine with timer drain loop
+- `use_intersection_observer` -- web_sys::IntersectionObserver + Closure::forget
+- `use_media_query` -- web_sys::matchMedia + event listener
+- `use_click_outside`
+- `use_previous`
+- `use_idle` / `use_online`
+- `use_scroll_position`
+- `use_element_size` (resize observer crate exists, unclear maintenance)
+- `use_key_press` (global)
+
+### Assessment
+
+The universal escape hatch for missing hooks: `web_sys` call -> `Closure::wrap` -> `.forget()` -> write into `Signal`. See `dioxus-dom-patterns` skill for implementations of intersection observer, resize observer, media query, localStorage sync, debounce, throttle, and global key listeners.
+
+For projects depending on many DOM hooks, hand-rolling from web_sys is more reliable than pulling 6+ micro-crates of varying Dioxus version compatibility.
+
 ## Ecosystem Maturity: Dioxus vs egui
 
 | Category | Dioxus | egui |

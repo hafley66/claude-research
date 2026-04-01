@@ -378,6 +378,23 @@ CollapsingHeader::new("Open by default")
     });
 ```
 
+## Interaction on already-allocated rects
+
+`ui.interact(rect, id, sense)` conflicts with any child widget that already allocated that rect (plots, frames, scroll areas). The child claims the rect's interaction slot first; the secondary `interact` call produces unreliable or silently ignored results.
+
+Prefer accessing the `Response` returned directly by the child widget:
+
+```rust
+// Wrong: conflicts with Plot's own allocation
+let resp = ui.interact(plot_rect, some_id, Sense::click());
+
+// Correct: use the response the plot already returns
+let plot_resp = Plot::new("chart").show(ui, |pui| { ... });
+if plot_resp.response.clicked() { ... }
+```
+
+Same applies to `Frame::show`, `ScrollArea::show`, and any widget that returns its own `Response`.
+
 ## Tabs (CSS: tab bar + conditional content)
 
 ```rust

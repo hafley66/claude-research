@@ -53,10 +53,14 @@ ctx.input(|i| {
     i.time          // wall clock seconds (f64)
     i.stable_dt     // smoothed frame delta (f32)
     i.pointer       // mouse position, buttons, drag
-    i.key_pressed(Key::Escape)
+    i.key_pressed(Key::Escape)  // true only the frame the key went down
     i.modifiers     // ctrl, shift, alt, cmd
 });
 ```
+
+`key_pressed()` is a per-frame snapshot -- it is NOT a held-key test. No event bubbling exists; multiple call sites can all read the same key in the same frame.
+
+Every widget returns a `Response` (`clicked()`, `hovered()`, `dragged()`, etc.). `Sense` controls what interactions a rect tracks (`Sense::click()`, `Sense::drag()`, `Sense::click_and_drag()`). Calling `ui.interact(rect, id, sense)` on a rect already claimed by a child widget (plot, scroll area, frame) produces unreliable results -- use the child's own returned `Response` instead.
 
 **Custom painting without widgets**:
 ```rust

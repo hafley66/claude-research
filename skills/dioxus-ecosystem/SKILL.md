@@ -181,6 +181,40 @@ The universal escape hatch for missing hooks: `web_sys` call -> `Closure::wrap` 
 
 For projects depending on many DOM hooks, hand-rolling from web_sys is more reliable than pulling 6+ micro-crates of varying Dioxus version compatibility.
 
+## Starter Kits and Example Repos
+
+### Fullstack (auth + CRUD + routing)
+
+| Repo | Stars | Stack | Features |
+|---|---|---|---|
+| dxps/fullstack-rust-axum-dioxus-rwa | 116 | Dioxus + Axum + PostgreSQL | RealWorld spec. Full auth, CRUD, REST API. Most complete fullstack example. |
+| rabbit19981023/dioxus-todo-fullstack | 54 | Dioxus + Tailwind + SQLx + PostgreSQL | Fullstack todo with migrations. Workspace: api/, web/, shared/. |
+| ModPhoenix/realworld-dioxus-app | 5 | Dioxus + trunk | JWT auth, article CRUD, user profiles, comments, pagination, following. |
+| pascalbehmenburg/actix-dioxus-starter-template | 1 | Shuttle + Actix + PostgreSQL + Dioxus | Session storage, identity middleware, ACL, migrations. WIP. |
+
+### Admin dashboards
+
+| Repo | Stars | Stack | Features |
+|---|---|---|---|
+| cody-why/r-dashboard | 30 | Trunk + Tailwind | WASM admin panel UI. Dark mode, responsive. |
+| zhi-gang/dioxus-daisyui-admin-portal | 3 | Dioxus + Tailwind + DaisyUI + Chart.js | Web + desktop. Educational. |
+
+### Starter templates
+
+| Repo | Stars | Stack | Features |
+|---|---|---|---|
+| DioxusLabs/dioxus-template | 68 | Official | Multi-platform sub-templates (web, desktop, fullstack, liveview). `dx new` generates from this. |
+| mrxiaozhuox/dioxus-starter | 42 | Dioxus + Tailwind + Fermi | Router, dark/light toggle, toasts, markdown, FontAwesome, localStorage. Live demo. Install: `dx create --template=gh:mrxiaozhuox/dioxus-starter` |
+| LyonSyonII/dioxus-tailwindcss | 43 | Dioxus + Tailwind CLI | Web + Desktop. Stale (Oct 2023). CC0 license. |
+
+### Official examples
+
+DioxusLabs/example-projects (526 stars, archived Sep 2024) moved into the main dioxus repo. Contains: TodoMVC (web/desktop/iOS), File Explorer, E-Commerce (LiveView), WiFi Scanner, Weather App, Dog App.
+
+### Assessment
+
+No kitchen-sink admin starter combining charts + tables + auth + routing + dark mode + responsive in one repo. The fullstack-axum-rwa (116 stars) is the most "real app" with auth and routing wired together. r-dashboard is closest to an admin panel. For a Chrome extension or Dioxus desktop devtool, mrxiaozhuox/dioxus-starter has the most transferable patterns (routing, dark mode, localStorage).
+
 ## Ecosystem Maturity: Dioxus vs egui
 
 | Category | Dioxus | egui |

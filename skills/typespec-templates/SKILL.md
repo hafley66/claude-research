@@ -268,6 +268,7 @@ See **typespec-functions** skill for full function coverage.
   alias StreamI<T> = Boundary<T, {}, streamI>;
   ```
 - **User-defined empty models as bounds**: Whether `model State {}` works as a generic constraint (`<T extends State>`) is unverified. The known-working constraints are built-in types (`object`, `Numeric`, `string`, etc.). Treat custom empty models as bounds as unconfirmed until tested.
+- **Function calls in template declaration context are not executed**: In declaration context (before instantiation), the compiler returns the function's return constraint type via `getDefaultFunctionResult` rather than running the JS implementation. The function runs only at instantiation time.
 
 ## Verification
 - Run `tsp compile` to verify template resolution

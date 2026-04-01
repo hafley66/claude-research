@@ -273,6 +273,83 @@ JS functions returning `undefined` are accepted for TypeSpec `void` return type.
 | JS binding | `$functions` export | `$decoratorName` export | N/A |
 | First-class value | Yes (assignable to const) | No | No |
 
+## Reflection API for operations
+
+When a function receives a `Reflection.Operation`, the JS side gets the full Operation object. Key fields:
+
+- `op.kind === 'Operation'`, `op.name`, `op.namespace`, `op.returnType`, `op.node`, `op.isFinished`, `op.entityKind`
+- `op.parameters` is a **Model**, not a Map. Iterate properties via `op.parameters.properties` (a `Map<string, ModelProperty>`)
+- `op.decorators` is an array; each entry has `.decorator.name` (prefixed with `$`, e.g. `"$after"`) and `.args` (array of `{value, kind}` where `value` is the actual referenced type or Operation object)
+
+When a function receives `Reflection.Namespace`:
+- `ns.operations`, `ns.namespaces`, and `ns.models` are all `Map` instances — iterable and walkable recursively
+
+Decorators can take `Reflection.Operation` as an arg. The JS decorator receives the full Operation object:
+```tsp
+extern dec after(target: Reflection.Operation, ref: Reflection.Operation);
+
+@after(Orders.mut.update.submit)
+op updateInventory(order: Order): void;
+// JS: (ctx, target, ref) where ref.name === "submit"
+```
+
+### Reserved keyword: `op`
+
+`op` is a reserved keyword and cannot be used as a parameter name in `extern fn` declarations. Use `target` or any other name:
+
+```tsp
+extern fn dumpOp(op: Reflection.Operation): unknown;     // FAILS — op is keyword
+extern fn dumpOp(target: Reflection.Operation): unknown;  // works
+```
+
+### Return type: undefined is not valid for `unknown`
+
+A function declared as returning `unknown` that returns `undefined` from JS errors with `"returned value null not assignable to unknown"`. Functions that only inspect types should return an input arg or another valid type rather than `undefined`.
+
+### Alias indirection required for function results used as types
+
+Function call results cannot be used inline as type expressions. They must go through an alias first:
+
+```tsp
+alias Merged = mergeModels(A, B);  // works
+model C is Merged;                  // works (through alias)
+
+model C is mergeModels(A, B);      // FAILS
+...mergeModels(A, B);              // FAILS — spread also requires alias
+```
+
+### Member access on function results: bind-time vs check-time phase mismatch
+
+Member access in TSP is symbol-based (bind time). Function results exist at check time. The name resolver walks symbol tables built by the binder. A model created in JS via `$.model.create(...)` has a `.properties` map but may lack the `.node.symbol.members` the name resolver needs. `fnResult.someProperty` fails if the return constraint is `unknown` or `Reflection.Model`.
+
+| Pattern | Works? | Why |
+|---|---|---|
+| `alias X = myFn(A, B)` | yes | fn called at check time, result is a real Type |
+| `model Y is X` | yes | copies properties into Y, which gets its own symbol table |
+| `model Y { ...X; }` | only if return constraint has members | spread reads from the constraint type statically |
+| `op foo(x: X): X` | yes | type position, no member resolution needed |
+| `X.someProperty` | no (if constraint is `unknown`/`Reflection.Model`) | name resolver can't find members on the constraint |
+| `addField(makeModel("a"), "b")` | yes | fn-to-fn chaining, no member access needed |
+
+**Model literal return constraints enable member access.** If the return constraint is a model literal, the constraint is parsed and bound at bind time, so the name resolver finds its members:
+
+```tsp
+extern fn f(m: Reflection.Model): { myProperty: string };
+// f(X).myProperty WORKS — constraint literal has bound symbols
+```
+
+Only works when the shape is known statically at declaration time. Fns that construct arbitrary shapes from namespace walks cannot use this.
+
+### Spread behavior with fn results
+
+- `unknown` return constraint: spread is a no-op (no properties to copy)
+- `Reflection.Model` return constraint: spread copies Reflection.Model's own meta-properties (name, properties, etc.), not the user model's properties
+- Model literal return constraint `{ a: string, b: int32 }`: spread copies `a` and `b` correctly
+
+### Template declaration context: functions are not called
+
+In a template declaration context (before instantiation), function calls are not executed. The compiler calls `getDefaultFunctionResult` which returns the return constraint type as a fallback. Only at instantiation time does the JS implementation run.
+
 ## Placement constraints
 
 `fn` declarations are **namespace-level only**. They cannot appear inside model bodies or interfaces. Only `op` can be a member of an interface; models cannot contain ops either.
@@ -298,6 +375,13 @@ interface Bar {
 - The type graph exposes functions as `functionDeclarations` on a Namespace.
 - The semantic walker visits FunctionValue declarations.
 - TSPD generates extern signatures for functions (like decorators).
+- Calling the same function with the same arguments N times runs the JS implementation N times (no memoization at the language level).
+
+## Open issues (as of 2026-03)
+
+**Issue #521** -- "Calling functions in template instantiations" (open, design:needed, since 2022). Motivating case: JS functions like `getParentResource` can't be called from `.tsp` type expressions. Four approaches proposed. No resolution.
+
+**Issue #904** -- "Unification of templates, functions, decorators & projections" (open, epic, since 2022). Goal: unified model allowing decorators in pure TSP, treating all four as functions over types. No resolution.
 
 ## Example prompts
 "Create a function that transforms a model based on visibility filters"

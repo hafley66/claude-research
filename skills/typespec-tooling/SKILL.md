@@ -102,6 +102,22 @@ Commit tspconfig.yaml with locked versions for consistent builds.
 - Test compilation without local setup
 - Experiment with decorators and emitters
 
+### Compiler API (`compile()`)
+```typescript
+import { compile, NodeHost } from "@typespec/compiler";
+
+const program = await compile(NodeHost, mainTspPath, { noEmit: true });
+
+// compile() does NOT throw on parse errors — check diagnostics manually
+if (program.diagnostics.length > 0) {
+  for (const d of program.diagnostics) {
+    console.error(`[${d.severity}] ${d.code}: ${d.message}`);
+    // d.target?.file?.path + d.target?.pos (char offset, not line) for source location
+  }
+}
+```
+A model whose body contains parse errors (reserved keyword used as property, inline anonymous model, etc.) compiles to a type with 0 properties and no `baseModel`. There is no thrown exception — only entries in `program.diagnostics`.
+
 ## Example prompts
 "Initialize a new TypeSpec REST API project"
 "Configure tspconfig.yaml with OpenAPI and JSON Schema emitters"

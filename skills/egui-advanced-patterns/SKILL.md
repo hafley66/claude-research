@@ -355,6 +355,60 @@ The fourth `StrokeKind` parameter controls whether the stroke is drawn outside, 
 
 Scale factor from screen space to radar space: `scale = RADIUS / max_screen_extent`. Clamp the transformed vector length to `RADIUS` for edge-clamping (dots at the radar boundary when targets are far away). This is the general pattern for any minimap or overview widget.
 
+## Event handling model
+
+No event registration. Everything is read during `update()` each frame.
+
+### InputState (keyboard / pointer)
+
+```rust
+ctx.input(|i| {
+    i.key_pressed(Key::Escape)    // went down THIS frame, not "is held"
+    i.key_down(Key::Shift)        // held
+    i.pointer.any_click()
+    i.pointer.interact_pos()      // Option<Pos2>
+    i.modifiers.ctrl
+});
+```
+
+`key_pressed()` is a per-frame boolean. It resets each frame -- not a held-key test.
+
+### Response (widget interaction)
+
+Every widget returns a `Response`. This is the primary event interface:
+
+```rust
+let resp = ui.button("Click me");
+if resp.clicked() { ... }
+if resp.hovered() { ... }
+if resp.dragged() { ... }
+if resp.drag_started() { ... }
+if resp.drag_stopped() { ... }
+```
+
+### Sense
+
+Controls what interactions a rect tracks. Primitive is `ui.allocate_exact_size`:
+
+```rust
+let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
+```
+
+Options: `Sense::click()`, `Sense::drag()`, `Sense::click_and_drag()`. A widget only receives events its `Sense` includes. First allocation of a rect wins -- layering a second `ui.interact()` on top is unreliable (see PlotResponse below).
+
+### No event bubbling
+
+Multiple code paths can read the same `key_pressed()` in the same frame. Nothing prevents double-handling; that's the app's responsibility. No `stopPropagation` equivalent exists.
+
+### Cross-frame state (egui temp storage)
+
+```rust
+let id = egui::Id::new("pin_state");
+ctx.data_mut(|d| d.insert_temp(id, value));
+let val: Option<T> = ctx.data(|d| d.get_temp(id));
+ctx.data_mut(|d| d.remove::<T>(id));
+```
+
 ## egui_plot: synchronized multi-chart dashboards
 
 ### Linked crosshair across charts
@@ -430,6 +484,40 @@ let chart_h = available_h * 0.60;
 let total_h = available_h - chart_h - gap;
 let rect = Rect::from_min_size(pos2(x, y), vec2(width, chart_h));
 ui.allocate_new_ui(UiBuilder::new().max_rect(rect), |ui| { ... });
+```
+
+### PlotResponse interaction
+
+`Plot::show()` returns a `PlotResponse`. Use its fields instead of calling `ui.interact()` on the plot rect.
+
+| Field / method | What |
+|---|---|
+| `plot_resp.response` | The `egui::Response` for the plot area; has `Sense::click_and_drag()` by default |
+| `plot_resp.response.clicked()` | Single click detection |
+| `plot_resp.response.dragged()` / `.drag_delta()` | Drag detection (works even with `allow_drag(false)`) |
+| `plot_resp.hovered_plot_item` | `Option<Id>` — which plot item the pointer is over; requires `.id(Id::new(...))` on `Line`/`Points`/etc. |
+| `Plot::sense(Sense)` | Builder method to override the default sense |
+
+`allow_drag(false)` disables egui_plot's internal pan behavior but does **not** change the allocated `Sense` — `drag_delta()` and `clicked()` on `plot_resp.response` remain usable.
+
+`ui.interact(plot_rect, id, sense)` on an already-allocated plot rect conflicts with the plot's own interaction allocation — use `plot_resp.response` directly.
+
+`PlotTransform::bounds()` returns `PlotBounds`; access x range via `.min()[0]` / `.max()[0]`.
+
+### Step / staircase lines
+
+To represent discrete-event data as a step function, transform `Vec<[f64; 2]>` by inserting `[x_next, y_prev]` before each successive point:
+
+```rust
+fn to_step_points(pts: &[[f64; 2]]) -> Vec<[f64; 2]> {
+    let mut out = Vec::with_capacity(pts.len() * 2);
+    for w in pts.windows(2) {
+        out.push(w[0]);
+        out.push([w[1][0], w[0][1]]); // horizontal step at y_prev
+    }
+    if let Some(&last) = pts.last() { out.push(last); }
+    out
+}
 ```
 
 ### Axis formatting

@@ -206,6 +206,7 @@ if ui.button("+").clicked() {
 | Fixed HUD overlay (above everything) | `ctx.layer_painter(LayerId::new(Order::Foreground, id))` | Draws above all panels/widgets; no `Response`, hit test manually via `ctx.input(|i| i.pointer...)` |
 | CSS Grid | `egui::Grid::new(id).show(ui, |ui| { ... ui.end_row(); })` | Simple grid. For CSS Grid semantics: `egui_taffy` |
 | Flexbox (full spec) | `egui_flex` crate | grow/shrink/basis/wrap |
+| `flex-grow` on table columns | `Column::range(min..=f32::INFINITY)` in egui_table | No weight ratios -- surplus distributes equally in pixels. Fixed columns need `range(w..=w)` or they also absorb surplus. |
 | `@media` queries | Check `ctx.screen_rect().width()` | Manual breakpoints |
 | `transform: scale()` | `egui::Scene` with TSTransform | Zoom/pan container |
 | `opacity` | `Color32::from_rgba_unmultiplied(r, g, b, alpha)` | Per-shape, not per-subtree |

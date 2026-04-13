@@ -86,6 +86,8 @@ ui.horizontal(|ui| {
 });
 ```
 
+**egui_table column flex is not like CSS flex-grow.** `Column::range(min..=f32::INFINITY)` marks a column as flex; surplus space distributes in equal absolute pixels, not by ratio. Fixed columns require `range(w..=w)` or they also consume surplus. See egui-table-core skill.
+
 ## Fixed sidebar + fluid main (CSS: `grid-template-columns: 250px 1fr`)
 
 ```rust

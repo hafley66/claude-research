@@ -5,8 +5,8 @@ license: MIT
 compatibility: opencode
 metadata:
   source: https://github.com/rerun-io/egui_table
-  crate: egui_table 0.7.0
-  egui: 0.33.x
+  crate: egui_table 0.8.0
+  egui: 0.34.x
   depth: intermediate
 ---
 
@@ -67,7 +67,25 @@ Column::new(200.0)
     .resizable(true)
 ```
 
-Static `Column::auto_size(columns, target_width)` distributes width evenly across columns respecting their `range` constraints, saturating those that hit min/max first.
+Static `Column::auto_size(columns, target_width)` distributes surplus space in **equal absolute pixels** across columns that have room to grow (i.e. whose current width is below their range max). When a column saturates its max, the remainder redistributes to the others. There are no weights or ratios -- distribution is always equal among eligible columns.
+
+### Column sizing gotchas (0.8.0, read from source: `columns.rs` lines 78-156)
+
+**No flex-grow property exists.** There are no weights, ratios, or proportional sizing modes.
+
+**Fixed columns must set `range(w..=w)` (min == max).** The default range is `4.0..=f32::INFINITY`. If you leave a "fixed" column at the default, `auto_size` treats it as a flex column and it will absorb surplus space, preventing other flex columns from growing.
+
+```rust
+// Fixed: auto_size skips this column entirely (min == max)
+Column::new(80.0).range(80.0..=80.0).id(egui::Id::new("cost"))
+
+// Flex: absorbs surplus space equally with other flex columns
+Column::new(200.0).range(140.0..=f32::INFINITY).id(egui::Id::new("name"))
+```
+
+**`auto_size_this_frame(true)`** triggers a content-measurement pass (measures actual cell content widths). This is separate from the space-distribution algorithm in `auto_size()`.
+
+**`resizable(bool)`** only controls user drag handles. It has no effect on `auto_size` behavior.
 
 ## AutoSizeMode
 

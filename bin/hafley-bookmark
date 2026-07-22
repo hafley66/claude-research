@@ -1,0 +1,348 @@
+#!/usr/bin/env python3
+"""Bookmark CRUD over ~/.claude/bookmarks.md.
+
+Subcommands:
+  (none) [label...]    Save the previous user+assistant turn with optional label.
+  ls                   List bookmarks with index, timestamp, label, user preview.
+  rm <idx> [<idx>...]  Remove bookmarks by 1-based index (as shown in `ls`).
+  show <idx>           Print a single bookmark to stdout (for recall).
+  file [path] [label]  Bookmark a file written/edited in a past turn of this session.
+                       If path omitted, lists candidate files from the session transcript.
+"""
+import json, os, sys, glob, time, re
+
+BOOKMARKS = os.path.expanduser("~/.claude/bookmarks.md")
+ENTRY_SPLIT = re.compile(r"(?m)^---\n(?=## )")
+
+def ancestor_pids():
+    """Yield this process's ancestors (parent, grandparent, ...) using ps."""
+    import subprocess
+    pid = os.getpid()
+    for _ in range(32):
+        try:
+            out = subprocess.run(
+                ["ps", "-o", "ppid=", "-p", str(pid)],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+        except Exception:
+            return
+        if not out:
+            return
+        try:
+            ppid = int(out)
+        except ValueError:
+            return
+        if ppid <= 1 or ppid == pid:
+            return
+        yield ppid
+        pid = ppid
+
+def resolve_session_transcript():
+    """Find the JSONL for the Claude Code session that invoked us.
+
+    Preference order:
+      1. A live session whose PID is one of our ancestors (unambiguous).
+      2. A live session whose cwd matches os.getcwd() (one match).
+      3. Newest JSONL by mtime in the cwd's project dir (fallback).
+    """
+    cwd = os.getcwd()
+    cwd_dashed = cwd.replace("/", "-")
+    tdir = os.path.expanduser(f"~/.claude/projects/{cwd_dashed}")
+    sessions_dir = os.path.expanduser("~/.claude/sessions")
+    sessions = []
+    if os.path.isdir(sessions_dir):
+        for fn in os.listdir(sessions_dir):
+            if not fn.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(sessions_dir, fn)) as f:
+                    sessions.append(json.load(f))
+            except Exception:
+                pass
+
+    # 1. ancestor match
+    ancestors = set(ancestor_pids())
+    ancestor_hits = [s for s in sessions if s.get("pid") in ancestors]
+    if len(ancestor_hits) == 1:
+        sid = ancestor_hits[0]["sessionId"]
+        p = f"{tdir}/{sid}.jsonl"
+        if os.path.exists(p):
+            return p
+
+    # 2. cwd match among live sessions (single)
+    cwd_hits = [s for s in sessions if s.get("cwd") == cwd]
+    if len(cwd_hits) == 1:
+        sid = cwd_hits[0]["sessionId"]
+        p = f"{tdir}/{sid}.jsonl"
+        if os.path.exists(p):
+            return p
+
+    # 3. fallback: newest by mtime
+    files = sorted(glob.glob(f"{tdir}/*.jsonl"), key=os.path.getmtime, reverse=True)
+    if files:
+        return files[0]
+    sys.exit(f"no transcripts under {tdir}")
+
+def load_session_entries():
+    path = resolve_session_transcript()
+    entries = []
+    with open(path) as f:
+        for line in f:
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    return path, entries
+
+def is_typed_user(e):
+    if e.get("type") != "user":
+        return False
+    content = e.get("message", {}).get("content")
+    if not isinstance(content, str):
+        return False
+    # skip local slash-command invocations — they show up as user messages
+    # but weren't actually typed by the human as prose
+    if "<command-name>" in content or "<local-command-caveat>" in content:
+        return False
+    if "<local-command-stdout>" in content or "<local-command-stderr>" in content:
+        return False
+    return True
+
+def is_assistant(e):
+    return e.get("type") == "assistant"
+
+def render_assistant(e):
+    blocks = e.get("message", {}).get("content", [])
+    if isinstance(blocks, str):
+        return blocks
+    parts = []
+    for b in blocks:
+        t = b.get("type")
+        if t == "text":
+            parts.append(b.get("text", ""))
+        elif t == "tool_use":
+            parts.append(f"`[tool_use: {b.get('name', '?')}]`")
+    return "\n".join(p for p in parts if p).strip()
+
+def render_user(e):
+    return (e.get("message", {}).get("content") or "").strip()
+
+def read_bookmarks_text():
+    if not os.path.exists(BOOKMARKS):
+        return ""
+    with open(BOOKMARKS) as f:
+        return f.read()
+
+def parse_entries():
+    text = read_bookmarks_text()
+    if not text.strip():
+        return []
+    chunks = [c for c in ENTRY_SPLIT.split(text) if c.strip().startswith("## ")]
+    out = []
+    for raw in chunks:
+        header = raw.splitlines()[0][3:].strip()
+        ts, _, label = header.partition(" — ")
+        user_match = re.search(r"(?ms)^### user\n(.*?)(?=\n### |\Z)", raw)
+        user_preview = (user_match.group(1).strip().splitlines() or [""])[0][:80] if user_match else ""
+        out.append({"ts": ts.strip(), "label": label.strip(), "preview": user_preview, "raw": raw.rstrip() + "\n"})
+    return out
+
+def write_entries(entries):
+    parts = []
+    for e in entries:
+        parts.append("---\n" + e["raw"].rstrip() + "\n")
+    with open(BOOKMARKS, "w") as f:
+        f.write("\n".join(parts))
+        if parts:
+            f.write("\n")
+
+def cmd_save(args):
+    n = 1
+    if len(args) >= 2 and args[0] == "-n":
+        try:
+            n = max(1, int(args[1]))
+        except ValueError:
+            sys.exit("-n expects an integer")
+        args = args[2:]
+    label = " ".join(args).strip()
+    path, entries = load_session_entries()
+
+    def is_bookmark_invocation(e):
+        if e.get("type") != "user":
+            return False
+        c = e.get("message", {}).get("content")
+        if not isinstance(c, str):
+            return False
+        return ("bookm-save" in c) or ("hafley-bookmark" in c) or ("/bookmark" in c)
+
+    # cut at the most recent bookmark invocation so we don't capture the
+    # bookmark call itself or its assistant reply
+    bookmark_idx = max((i for i, e in enumerate(entries) if is_bookmark_invocation(e)), default=-1)
+    if bookmark_idx >= 0:
+        prior = entries[:bookmark_idx]
+    else:
+        prior = entries
+
+    # walk backward collecting up to n (user, assistant) pairs in chronological order
+    pairs = []
+    cursor = prior
+    while len(pairs) < n:
+        a = next((e for e in reversed(cursor) if is_assistant(e)), None)
+        if a is None:
+            break
+        a_pos = cursor.index(a)
+        u = next((e for e in reversed(cursor[:a_pos]) if is_typed_user(e)), None)
+        if u is None:
+            break
+        pairs.append((u, a))
+        cursor = cursor[:cursor.index(u)]
+    pairs.reverse()
+
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    header = f"## {ts}" + (f" — {label}" if label else "")
+    with open(BOOKMARKS, "a") as f:
+        f.write(f"\n---\n{header}\n")
+        f.write(f"_session: `{os.path.basename(path)}` · cwd: `{os.getcwd()}` · turns: {len(pairs)}_\n\n")
+        for i, (u, a) in enumerate(pairs, 1):
+            suffix = f" {i}" if len(pairs) > 1 else ""
+            if u:
+                f.write(f"### user{suffix}\n{render_user(u)}\n\n")
+            if a:
+                f.write(f"### assistant{suffix}\n{render_assistant(a)}\n\n")
+    print(f"bookmarked → {BOOKMARKS}")
+    if label:
+        print(f"label: {label}")
+    print(f"pairs captured: {len(pairs)} (requested {n})")
+
+def cmd_ls(_args):
+    entries = parse_entries()
+    if not entries:
+        print("(no bookmarks)")
+        return
+    for i, e in enumerate(entries, 1):
+        label = e["label"] or "—"
+        print(f"{i:>3}  {e['ts']}  [{label}]  {e['preview']}")
+
+def resolve(selector, entries):
+    """Resolve a selector to a 1-based index. Selector may be numeric or a label.
+    Label match: exact (case-insensitive), else unique substring match.
+    Returns int index or raises SystemExit with a message."""
+    s = selector.strip()
+    if s.isdigit():
+        i = int(s)
+        if not (1 <= i <= len(entries)):
+            raise SystemExit(f"index {i} out of range (have {len(entries)})")
+        return i
+    low = s.lower()
+    exact = [i for i, e in enumerate(entries, 1) if e["label"].lower() == low]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        raise SystemExit(f"label {s!r} matches {len(exact)} entries exactly: {exact}")
+    sub = [i for i, e in enumerate(entries, 1) if low in e["label"].lower()]
+    if len(sub) == 1:
+        return sub[0]
+    if not sub:
+        raise SystemExit(f"no bookmark matches {s!r}")
+    raise SystemExit(f"{s!r} is ambiguous: matches {sub} — use index or a longer label")
+
+def cmd_rm(args):
+    if not args:
+        sys.exit("rm: need index or label")
+    entries = parse_entries()
+    idxs = sorted({resolve(a, entries) for a in args}, reverse=True)
+    removed = []
+    for i in idxs:
+        removed.append((i, entries[i-1]["ts"], entries[i-1]["label"]))
+        del entries[i-1]
+    write_entries(entries)
+    for i, ts, label in removed:
+        print(f"removed #{i}  {ts}  [{label or '—'}]")
+
+def cmd_show(args):
+    if not args:
+        sys.exit("show: need index or label")
+    entries = parse_entries()
+    # allow "show smoke test" as one label with spaces
+    selector = " ".join(args) if not args[0].isdigit() else args[0]
+    i = resolve(selector, entries)
+    sys.stdout.write("---\n" + entries[i-1]["raw"])
+
+def cmd_file(args):
+    path_arg = None
+    label_parts = []
+    if args:
+        first = args[0]
+        if first.startswith("/") or first.startswith("./") or first.startswith("~") or os.path.exists(os.path.expanduser(first)):
+            path_arg = os.path.expanduser(first)
+            label_parts = args[1:]
+        else:
+            label_parts = args
+    label = " ".join(label_parts).strip()
+    _, entries = load_session_entries()
+
+    # collect file-touching tool_use blocks from assistant messages
+    touched = []  # list of (turn_idx, tool_name, file_path)
+    for i, e in enumerate(entries):
+        if not is_assistant(e):
+            continue
+        for b in e.get("message", {}).get("content", []) or []:
+            if b.get("type") != "tool_use":
+                continue
+            name = b.get("name", "")
+            inp = b.get("input", {}) or {}
+            fp = inp.get("file_path") or inp.get("path") or inp.get("notebook_path")
+            if name in ("Write", "Edit", "MultiEdit", "NotebookEdit") and fp:
+                touched.append((i, name, fp))
+
+    if path_arg is None:
+        if not touched:
+            print("(no Write/Edit tool calls in current session)")
+            return
+        seen = {}
+        for _, name, fp in touched:
+            seen.setdefault(fp, []).append(name)
+        print("candidates (pass a path to bookmark it):")
+        for fp, names in seen.items():
+            print(f"  {fp}  [{', '.join(names)}]")
+        return
+
+    target = os.path.abspath(path_arg)
+    if not os.path.exists(target):
+        sys.exit(f"file: {target} does not exist")
+    with open(target) as f:
+        content = f.read()
+    tool_names = [n for _, n, fp in touched if os.path.abspath(fp) == target]
+    tool_note = ", ".join(sorted(set(tool_names))) if tool_names else "not found in current session"
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    header = f"## {ts} — file"
+    if label:
+        header += f": {label}"
+    size = len(content)
+    lang = os.path.splitext(target)[1].lstrip(".")
+    with open(BOOKMARKS, "a") as f:
+        f.write(f"\n---\n{header}\n")
+        f.write(f"_file: `{target}` · tool: {tool_note} · size: {size}B_\n\n")
+        f.write(f"### file content\n```{lang}\n{content}\n```\n")
+    print(f"bookmarked file → {BOOKMARKS}")
+    print(f"file: {target}  ({size}B)  tool: {tool_note}")
+
+def main():
+    argv = sys.argv[1:]
+    if not argv:
+        return cmd_save([])
+    cmd = argv[0]
+    rest = argv[1:]
+    if cmd == "ls":
+        return cmd_ls(rest)
+    if cmd == "rm":
+        return cmd_rm(rest)
+    if cmd == "show":
+        return cmd_show(rest)
+    if cmd == "file":
+        return cmd_file(rest)
+    # default: treat all args as label for save
+    return cmd_save(argv)
+
+if __name__ == "__main__":
+    main()

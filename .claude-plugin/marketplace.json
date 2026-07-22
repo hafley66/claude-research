@@ -5,7 +5,7 @@
   },
   "plugins": [
     {
-      "name": "hafley",
+      "name": "i",
       "source": "./",
       "description": "Hafley's skill collection — research, code analysis, API design, and book authoring tools"
     }

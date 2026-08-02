@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CSS Anchor Node Editor</title>
+<style>
+  :root {
+    --bg: #0a0e14; --grid: #131a26; --cyan: #2de2e6; --magenta: #ff3caa;
+    --node: #121a28; --node-border: #24364f; --ink: #cfe3ff; --muted: #6f86a6;
+    --sel: #ffd166;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; color: var(--ink);
+    font: 13px/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--bg); }
+
+  /* viewport = fixed window; world = panned/zoomed layer (the containing block) */
+  .viewport { position: fixed; inset: 0; overflow: hidden; cursor: grab;
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 32px 32px; background-position: 0 0; }
+  .viewport.panning { cursor: grabbing; }
+  .viewport.connecting { cursor: crosshair; }
+  .world { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    transform-origin: 0 0; }
+
+  /* ── NODES ─────────────────────────────────────────────────────────── */
+  .node {
+    position: absolute; width: 168px; z-index: 2;
+    background: linear-gradient(180deg, #16223400, #0e1622cc), var(--node);
+    border: 1px solid var(--node-border); border-radius: 12px;
+    box-shadow: 0 8px 30px #0009, inset 0 1px 0 #ffffff10;
+    user-select: none; transition: box-shadow .15s, border-color .15s; }
+  .node:hover { border-color: #36527a; }
+  .node.dragging { box-shadow: 0 0 0 1px var(--cyan), 0 14px 50px #000c, 0 0 40px #2de2e633; z-index: 6; }
+  .node.selected { border-color: var(--sel); box-shadow: 0 0 0 1px var(--sel), 0 10px 40px #000a; }
+
+  .node .head { display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    cursor: grab; font-weight: 600; letter-spacing: .3px; border-bottom: 1px solid #ffffff0d; }
+  .node.dragging .head { cursor: grabbing; }
+  .node .head .dot { width: 8px; height: 8px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 8px var(--cyan); flex: 0 0 auto; }
+  .node .head .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node .head .del { all: unset; cursor: pointer; color: var(--muted); width: 16px; height: 16px;
+    display: grid; place-items: center; border-radius: 4px; font-size: 12px; }
+  .node .head .del:hover { color: #fff; background: #ff3caa44; }
+
+  .row { position: relative; display: flex; align-items: center; height: 24px; padding: 0 12px; }
+  .row.in  { justify-content: flex-start; }
+  .row.out { justify-content: flex-end; }
+  .row .name { color: var(--muted); font-size: 12px; }
+
+  /* ── PORTS (the anchors) ───────────────────────────────────────────── */
+  .port { position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%;
+    transform: translateY(-50%); cursor: crosshair; z-index: 3;
+    transition: box-shadow .12s, transform .12s; }
+  .port:hover { transform: translateY(-50%) scale(1.35); }
+  .port.out { right: -7px;
+    background: radial-gradient(circle at 50% 40%, #fff, var(--cyan) 60%, #0c5b5e);
+    box-shadow: 0 0 8px var(--cyan); border: 1px solid #0a3b3d; }
+  .port.in  { left: -7px;
+    background: radial-gradient(circle at 50% 40%, #fff, var(--magenta) 60%, #6e0f48);
+    box-shadow: 0 0 8px var(--magenta); border: 1px solid #3b0a2c; }
+  .viewport.connecting .port.in { box-shadow: 0 0 0 3px #ff3caa55, 0 0 14px var(--magenta); }
+  .port.in.hot { transform: translateY(-50%) scale(1.5); box-shadow: 0 0 0 4px #ff3caa99, 0 0 18px var(--magenta); }
+
+  /* ══ THE EDGE: pure-CSS tether between two anchors ════════════════════ */
+  .edge { position: absolute; z-index: 1; pointer-events: none;
+    top:    min(anchor(var(--a) center), anchor(var(--b) center));
+    left:   min(anchor(var(--a) center), anchor(var(--b) center));
+    right:  min(anchor(var(--a) center), anchor(var(--b) center));
+    bottom: min(anchor(var(--a) center), anchor(var(--b) center)); }
+  .edge svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible;
+    filter: drop-shadow(0 0 5px #2de2e677); }
+  .edge.flip svg { transform: scaleY(-1); transform-origin: center; }
+  .edge .wire { fill: none; stroke: url(#g); stroke-width: 3; stroke-linecap: round;
+    vector-effect: non-scaling-stroke; stroke-dasharray: 7 9; animation: flow 1s linear infinite; }
+  .edge .hit  { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; cursor: pointer; }
+  .edge.selected .wire { stroke: var(--sel); stroke-dasharray: none; }
+  .edge.ghost .wire { stroke-dasharray: 4 6; opacity: .85; }
+  @keyframes flow { to { stroke-dashoffset: -16; } }
+
+  /* packet bead — hidden until the toggle is on */
+  .edge .packet { display: none; fill: none; stroke: #ffffff;
+    stroke-width: 5; stroke-linecap: round; vector-effect: non-scaling-stroke;
+    stroke-dasharray: 1 29; filter: drop-shadow(0 0 5px var(--cyan));
+    animation: packet 1.1s linear infinite; }
+  @keyframes packet { to { stroke-dashoffset: -30; } }
+
+  /* ── OPT-IN FLOW BEHAVIORS (all default OFF) ─────────────────────────── */
+  /* → flow: make every wire flow source→sink despite the mirror-flip */
+  body.fx-dir .edge.flip .wire,
+  body.fx-dir .edge.flip .packet { animation-direction: reverse; }
+  /* len speed: long wires flow lazily, short ones zip (--len set in JS) */
+  body.fx-len .edge .wire   { animation-duration: clamp(.5s, calc(var(--len, 200) * 3ms), 4s); }
+  body.fx-len .edge .packet { animation-duration: clamp(.6s, calc(var(--len, 200) * 4ms), 5s); }
+  /* packets: reveal the bead path */
+  body.fx-packets .edge:not(.ghost) .packet { display: block; }
+  /* rev on move: the whole graph revs while a node drags / canvas pans */
+  body.fx-rev .world.moving .edge .wire   { animation-duration: .28s; }
+  body.fx-rev .world.moving .edge .packet { animation-duration: .4s; }
+
+  /* ── TOOLBAR / HUD ─────────────────────────────────────────────────── */
+  .bar { position: fixed; top: 14px; left: 14px; right: 14px; display: flex; align-items: center;
+    gap: 8px; z-index: 20; pointer-events: none; }
+  .bar .title { font-weight: 700; color: #fff; letter-spacing: .4px; margin-right: 4px; }
+  .bar .title b { color: var(--cyan); }
+  .bar .spacer { flex: 1; }
+  .bar button { pointer-events: auto; all: unset; cursor: pointer; padding: 7px 12px; border-radius: 8px;
+    background: #14233a; border: 1px solid #284060; color: var(--ink); font: inherit; }
+  .bar button:hover { border-color: var(--cyan); background: #173050; }
+  .bar .toggle { padding: 7px 10px; color: var(--muted); }
+  .bar .toggle.on { color: #fff; border-color: var(--cyan); background: #173a52; box-shadow: 0 0 10px #2de2e644; }
+  .bar .sep { width: 1px; height: 22px; background: #243a57; margin: 0 2px; }
+  .bar .pill { pointer-events: none; padding: 7px 10px; border-radius: 8px; background: #0d1828aa;
+    border: 1px solid #213650; color: var(--muted); }
+  .hint { position: fixed; bottom: 14px; left: 14px; z-index: 20; color: var(--muted); font-size: 12px; }
+  .hint b { color: var(--ink); } .hint .k { color: var(--cyan); }
+
+  .unsupported { display: none; position: fixed; inset: 0; place-items: center; text-align: center;
+    background: var(--bg); padding: 40px; z-index: 99; }
+  @supports not (top: anchor(--x center)) { .unsupported { display: grid; } .viewport { filter: blur(3px); } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#2de2e6"/><stop offset="1" stop-color="#ff3caa"/>
+  </linearGradient>
+</defs></svg>
+
+<div class="bar">
+  <span class="title">CSS Anchor <b>Node Editor</b></span>
+  <button id="addBtn">+ Add node</button>
+  <button id="resetBtn">Reset view</button>
+  <span class="spacer"></span>
+  <button class="toggle" data-fx="fx-dir"     title="all wires flow source→sink">→ flow</button>
+  <button class="toggle" data-fx="fx-len"     title="speed scales with wire length">len speed</button>
+  <button class="toggle" data-fx="fx-packets" title="traveling data beads">packets</button>
+  <button class="toggle" data-fx="fx-rev"     title="rev the flow while moving">rev on move</button>
+  <span class="sep"></span>
+  <span class="pill" id="zoomPill">100%</span>
+</div>
+
+<div class="viewport" id="viewport">
+  <div class="world" id="world">
+    <div id="cursor" style="position:absolute;width:1px;height:1px;anchor-name:--cursor;left:0;top:0"></div>
+  </div>
+</div>
+
+<div class="hint">
+  drag <b>title</b> to move · drag a <span class="k">cyan</span> port to a <span class="k">magenta</span> port to wire ·
+  drag empty space to <b>pan</b> · <b>scroll</b> to zoom · click + <b>Delete</b> to remove
+</div>
+
+<div class="unsupported"><div>
+  <h2>No CSS anchor positioning here.</h2>
+  <p>Use Chrome 125+, Safari 26+, or Firefox 147+. The wires are pure CSS — there is no fallback.</p>
+</div></div>
+
+<script>
+const world = document.getElementById('world');
+const viewport = document.getElementById('viewport');
+const cursorEl = document.getElementById('cursor');
+
+// ── state ────────────────────────────────────────────────────────────────
+const nodes = new Map();   // nodeId -> {id, el}
+const edges = new Map();   // edgeId -> {id, from, to, el, ghost?}
+const ports = new Map();   // portId -> {id, nodeId, kind:'in'|'out', el}
+let uid = 0;
+const nid = () => 'n' + (uid++), pid = () => 'p' + (uid++), eid = () => 'e' + (uid++);
+
+const view = { x: 60, y: 40, z: 1 };
+function applyView() {
+  world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.z})`;
+  document.getElementById('zoomPill').textContent = Math.round(view.z * 100) + '%';
+}
+function toWorld(sx, sy) {
+  const r = viewport.getBoundingClientRect();
+  return { x: (sx - r.left - view.x) / view.z, y: (sy - r.top - view.y) / view.z };
+}
+
+// ── build a node ──────────────────────────────────────────────────────────
+function addNode({ x, y, title, inputs = ['in'], outputs = ['out'] }) {
+  const id = nid();
+  const el = document.createElement('div');
+  el.className = 'node'; el.id = id;
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+  el.style.anchorName = '--' + id;
+
+  const head = document.createElement('div');
+  head.className = 'head';
+  head.innerHTML = `<span class="dot"></span><span class="label">${title}</span><button class="del" title="delete">✕</button>`;
+  el.appendChild(head);
+
+  const mkPort = (kind, name) => {
+    const p = pid();
+    const row = document.createElement('div');
+    row.className = 'row ' + kind;
+    const dot = document.createElement('span');
+    dot.className = 'port ' + kind;
+    dot.style.anchorName = '--' + p;
+    dot.dataset.port = p;
+    row.innerHTML = `<span class="name">${name}</span>`;
+    if (kind === 'in') row.prepend(dot); else row.append(dot);
+    el.appendChild(row);
+    ports.set(p, { id: p, nodeId: id, kind, el: dot });
+    return p;
+  };
+  const inIds = inputs.map(n => mkPort('in', n));
+  const outIds = outputs.map(n => mkPort('out', n));
+
+  world.appendChild(el);                    // nodes appended before edges → anchors precede
+  nodes.set(id, { id, el });
+  head.querySelector('.del').addEventListener('pointerdown', e => e.stopPropagation());
+  head.querySelector('.del').addEventListener('click', e => { e.stopPropagation(); removeNode(id); });
+  return { id, inIds, outIds };
+}
+
+function removeNode(id) {
+  const n = nodes.get(id); if (!n) return;
+  [...ports.values()].filter(p => p.nodeId === id).forEach(p => {
+    [...edges.values()].filter(e => e.from === p.id || e.to === p.id).forEach(e => removeEdge(e.id));
+    ports.delete(p.id);
+  });
+  n.el.remove(); nodes.delete(id); scheduleFlips();
+}
+
+const PATH = 'M0,0 C50,0 50,100 100,100';
+// ── build an edge (the magic is the two anchor-names) ───────────────────────
+function addEdge(fromPortId, toPortId) {
+  if (!ports.has(fromPortId) || !ports.has(toPortId)) return;
+  const f = ports.get(fromPortId), t = ports.get(toPortId);
+  if (f.nodeId === t.nodeId) return;                        // no self-loop
+  for (const e of edges.values()) if (e.from === fromPortId && e.to === toPortId) return; // no dup
+  const id = eid();
+  const el = document.createElement('div');
+  el.className = 'edge'; el.id = id;
+  el.style.setProperty('--a', '--' + fromPortId);
+  el.style.setProperty('--b', '--' + toPortId);
+  el.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none">
+    <path class="hit"    d="${PATH}"/>
+    <path class="wire"   d="${PATH}"/>
+    <path class="packet" d="${PATH}"/></svg>`;
+  world.appendChild(el);                                    // edges last → after their anchors
+  edges.set(id, { id, from: fromPortId, to: toPortId, el });
+  el.querySelector('.hit').addEventListener('click', ev => { ev.stopPropagation(); select(el, id, 'edge'); });
+  scheduleFlips();
+  return id;
+}
+function removeEdge(id) { const e = edges.get(id); if (!e) return; e.el.remove(); edges.delete(id); }
+
+// ── flip the curve onto the correct diagonal + set --len (the only edge math) ─
+let flipQueued = false;
+function scheduleFlips() { if (!flipQueued) { flipQueued = true; requestAnimationFrame(runFlips); } }
+function runFlips() {
+  flipQueued = false;
+  for (const e of edges.values()) {
+    const a = ports.get(e.from)?.el.getBoundingClientRect();
+    const b = e.to === '__cursor__' ? cursorEl.getBoundingClientRect() : ports.get(e.to)?.el.getBoundingClientRect();
+    if (!a || !b) continue;
+    e.el.classList.toggle('flip', (a.left < b.left) !== (a.top < b.top));
+    const len = Math.hypot((b.left - a.left), (b.top - a.top)) / view.z;   // world-space length
+    e.el.style.setProperty('--len', Math.round(len));
+  }
+}
+
+// ── selection + delete ──────────────────────────────────────────────────────
+let selected = null; // {el, id, kind}
+function select(el, id, kind) {
+  if (selected) selected.el.classList.remove('selected');
+  selected = el ? { el, id, kind } : null;
+  if (el) el.classList.add('selected');
+}
+window.addEventListener('keydown', e => {
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
+    if (selected.kind === 'node') removeNode(selected.id); else removeEdge(selected.id);
+    selected = null;
+  }
+});
+
+// ── pointer interactions: drag node / pan / wire ────────────────────────────
+let mode = null;          // 'drag' | 'pan' | 'connect'
+let dragNode = null, dragOff = null, panStart = null, fromPort = null, ghostId = null;
+
+viewport.addEventListener('pointerdown', ev => {
+  const portEl = ev.target.closest('.port.out');
+  const head = ev.target.closest('.node .head');
+  const nodeEl = ev.target.closest('.node');
+
+  if (portEl) {                                   // start wiring from an output port
+    mode = 'connect'; fromPort = portEl.dataset.port;
+    viewport.classList.add('connecting');
+    moveCursor(ev);
+    ghostId = addGhost(fromPort);
+    viewport.setPointerCapture(ev.pointerId);
+  } else if (head) {                              // drag a node
+    mode = 'drag'; dragNode = head.closest('.node');
+    select(dragNode, dragNode.id, 'node');
+    dragNode.classList.add('dragging'); world.classList.add('moving');
+    const w = toWorld(ev.clientX, ev.clientY);
+    dragOff = { x: w.x - parseFloat(dragNode.style.left), y: w.y - parseFloat(dragNode.style.top) };
+    viewport.setPointerCapture(ev.pointerId);
+  } else if (!nodeEl) {                           // pan empty space
+    mode = 'pan'; panStart = { x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y };
+    select(null); viewport.classList.add('panning'); world.classList.add('moving');
+    viewport.setPointerCapture(ev.pointerId);
+  }
+});
+
+viewport.addEventListener('pointermove', ev => {
+  if (mode === 'drag') {
+    const w = toWorld(ev.clientX, ev.clientY);
+    dragNode.style.left = (w.x - dragOff.x) + 'px';
+    dragNode.style.top  = (w.y - dragOff.y) + 'px';
+    scheduleFlips();
+  } else if (mode === 'pan') {
+    view.x = panStart.vx + (ev.clientX - panStart.x);
+    view.y = panStart.vy + (ev.clientY - panStart.y);
+    applyView(); scheduleFlips();
+  } else if (mode === 'connect') {
+    moveCursor(ev); scheduleFlips();
+    document.querySelectorAll('.port.in.hot').forEach(p => p.classList.remove('hot'));
+    const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.port.in');
+    if (over) over.classList.add('hot');
+  }
+});
+
+viewport.addEventListener('pointerup', ev => {
+  if (mode === 'connect') {
+    const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.port.in');
+    if (over) addEdge(fromPort, over.dataset.port);
+    document.querySelectorAll('.port.in.hot').forEach(p => p.classList.remove('hot'));
+    if (ghostId) removeEdge(ghostId);
+    viewport.classList.remove('connecting'); ghostId = null; fromPort = null;
+  }
+  if (dragNode) dragNode.classList.remove('dragging');
+  viewport.classList.remove('panning'); world.classList.remove('moving');
+  mode = null; dragNode = null; panStart = null;
+});
+
+function moveCursor(ev) {
+  const w = toWorld(ev.clientX, ev.clientY);
+  cursorEl.style.left = w.x + 'px'; cursorEl.style.top = w.y + 'px';
+}
+// the ghost wire is itself anchor-positioned: source port ↔ the 1px cursor anchor
+function addGhost(fromPortId) {
+  const id = eid();
+  const el = document.createElement('div');
+  el.className = 'edge ghost'; el.id = id;
+  el.style.setProperty('--a', '--' + fromPortId);
+  el.style.setProperty('--b', '--cursor');
+  el.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><path class="wire" d="${PATH}"/></svg>`;
+  world.appendChild(el);
+  edges.set(id, { id, from: fromPortId, to: '__cursor__', el, ghost: true });
+  return id;
+}
+
+// ── zoom (cursor-anchored) ──────────────────────────────────────────────────
+viewport.addEventListener('wheel', ev => {
+  ev.preventDefault();
+  const r = viewport.getBoundingClientRect();
+  const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+  const wx = (sx - view.x) / view.z, wy = (sy - view.y) / view.z;
+  view.z = Math.min(2.5, Math.max(0.3, view.z * (ev.deltaY < 0 ? 1.1 : 1 / 1.1)));
+  view.x = sx - wx * view.z; view.y = sy - wy * view.z;
+  applyView(); scheduleFlips();
+}, { passive: false });
+
+// ── toolbar ────────────────────────────────────────────────────────────────
+let addCount = 0;
+document.getElementById('addBtn').addEventListener('click', () => {
+  const c = toWorld(innerWidth / 2, innerHeight / 2);
+  addNode({ x: c.x - 84 + (addCount % 4) * 24, y: c.y - 40 + (addCount % 4) * 24,
+            title: 'Process ' + (++addCount), inputs: ['a', 'b'], outputs: ['out'] });
+});
+document.getElementById('resetBtn').addEventListener('click', () => {
+  view.x = 60; view.y = 40; view.z = 1; applyView(); scheduleFlips();
+});
+// the opt-in flow toggles — each just flips a body class the CSS keys off
+document.querySelectorAll('.toggle').forEach(b => b.addEventListener('click', () => {
+  const on = document.body.classList.toggle(b.dataset.fx);
+  b.classList.toggle('on', on);
+}));
+
+// ── seed graph ───────────────────────────────────────────────────────────────
+applyView();
+const a = addNode({ x: 40,  y: 240, title: 'Input',     inputs: [],          outputs: ['data'] });
+const b = addNode({ x: 300, y: 240, title: 'Parse',     inputs: ['src'],     outputs: ['ast'] });
+const c = addNode({ x: 580, y: 110, title: 'Transform', inputs: ['ast'],     outputs: ['out'] });
+const d = addNode({ x: 580, y: 380, title: 'Validate',  inputs: ['ast'],     outputs: ['ok'] });
+const e = addNode({ x: 860, y: 240, title: 'Render',    inputs: ['a', 'b'],  outputs: ['html'] });
+const f = addNode({ x: 1140, y: 240, title: 'Output',   inputs: ['sink'],    outputs: [] });
+addEdge(a.outIds[0], b.inIds[0]);
+addEdge(b.outIds[0], c.inIds[0]);
+addEdge(b.outIds[0], d.inIds[0]);
+addEdge(c.outIds[0], e.inIds[0]);
+addEdge(d.outIds[0], e.inIds[1]);
+addEdge(e.outIds[0], f.inIds[0]);
+scheduleFlips();
+</script>
+</body>
+</html>

@@ -12,19 +12,8 @@ Target: `$ARGUMENTS`
 ## Instructions
 
 1. Read the target code (file path, function name, or pasted snippet from `$ARGUMENTS`).
-2. Write the Coffee/RxJS version first. Rules:
-   - tokio stream → RxJS `Observable`
-   - `.then(async fn)` → `mergeMap(fn, 1)`
-   - `.buffer_unordered(N)` → `mergeMap(fn, N)`
-   - `.flat_map(|x| stream::iter(xs))` → `mergeMap((x) => from(xs))`
-   - `futures::future::join_all(vec)` → `Promise.all(arr)`
-   - `tokio::spawn_blocking(f)` / `rayon::spawn(f)` → `pool.runOne(fn)` returning a Promise
-   - `rayon::par_iter(...).collect()` inside spawn_blocking → `pool.runBatch(items, fn)` returning `Promise<Result[]>`
-   - `tokio::sync::oneshot::channel()` → `new Promise((resolve) => ...)` where the sender calls `resolve`
-   - `Arc<T>` → plain JS reference (ignore unless refcounting matters)
-   - `cancel_token.cancelled()` race → `takeUntil(cancel$)`
-   - Two-phase batch: async I/O prefetch (`Promise.all`) then CPU batch (`pool.runBatch`) mirrors `join_all` then `spawn_blocking(|| par_iter)`.
-3. Number every semantically load-bearing line in Coffee with `# [NN]`. Skip noise (imports, braces, etc.).
+2. Write the Coffee/RxJS version first, using the mental model table below as the translation rules.
+3. Number every semantically important line in Coffee with `# [NN]`. Skip noise (imports, braces, etc.).
 4. Write the Rust with `// [NN]` comments **directly above** the matching line. One label per line is fine; a line may carry more than one label if it fuses steps.
 5. Keep both versions roughly the same vertical length so the eye can scan label-to-label.
 6. After the two code blocks, print the **mental model table** below. Append any row specific to the target that isn't already covered.

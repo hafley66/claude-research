@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CSS Anchor Positioning — zero-JS node editor</title>
+<style>
+  /* ───────────────────────────────────────────────────────────────────────
+     THE WHOLE TRICK IS THE `.edge` RULE BELOW.
+     One absolutely-positioned box is pinned between TWO different anchors —
+     one per pair of inset properties — so it spans the bounding rectangle of
+     two ports. Drag a node and the browser re-lays-out every edge for free.
+     JavaScript here only (a) moves nodes on drag and (b) flips the curve's
+     mirror image. It computes ZERO edge geometry. CSS does all positioning.
+     ─────────────────────────────────────────────────────────────────────── */
+
+  :root {
+    --bg: #0a0e14;
+    --grid: #131a26;
+    --cyan: #2de2e6;
+    --magenta: #ff3caa;
+    --node: #121a28;
+    --node-border: #24364f;
+    --ink: #cfe3ff;
+    --muted: #6f86a6;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden;
+    font: 14px/1.4 ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink);
+    background: var(--bg); }
+
+  /* The canvas is the positioning context (containing block) for nodes+edges. */
+  .canvas {
+    position: relative; width: 100vw; height: 100vh; overflow: hidden;
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* ── NODES ─────────────────────────────────────────────────────────────
+     Absolutely positioned. Each gets a unique anchor-name (for its inspector
+     popover) and carries two port elements with their own anchor-names. */
+  .node {
+    position: absolute; width: 160px;
+    background: linear-gradient(180deg, #16223400, #0e1622cc), var(--node);
+    border: 1px solid var(--node-border); border-radius: 12px;
+    box-shadow: 0 8px 30px #0009, inset 0 1px 0 #ffffff10;
+    user-select: none; touch-action: none;
+    transition: box-shadow .2s, border-color .2s;
+  }
+  .node:hover { border-color: #36527a; }
+  .node.dragging { box-shadow: 0 0 0 1px var(--cyan), 0 14px 50px #000c, 0 0 40px #2de2e633; z-index: 5; }
+
+  .node .head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 11px; cursor: grab; font-weight: 600; letter-spacing: .3px;
+    border-bottom: 1px solid #ffffff0d;
+  }
+  .node.dragging .head { cursor: grabbing; }
+  .node .head .dot { width: 8px; height: 8px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 8px var(--cyan); flex: 0 0 auto; }
+  .node .head .label { flex: 1; }
+  .node .head .info {
+    all: unset; cursor: pointer; width: 18px; height: 18px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 11px; color: var(--muted);
+    border: 1px solid #2a3e5c;
+  }
+  .node .head .info:hover { color: var(--ink); border-color: var(--cyan); }
+  .node .body { padding: 9px 11px; color: var(--muted); font-size: 12px; }
+
+  /* ── PORTS ─────────────────────────────────────────────────────────────
+     The port's CENTER is the anchor point. Output sits on the right edge,
+     input on the left edge. anchor-name is set inline per port. */
+  .port {
+    position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+    transform: translateY(-50%);
+    background: radial-gradient(circle at 50% 40%, #fff, var(--cyan) 60%, #0c5b5e);
+    box-shadow: 0 0 10px var(--cyan), 0 0 2px #fff inset; border: 1px solid #0a3b3d;
+  }
+  .port.out { right: -8px; }
+  .port.in  { left: -8px;
+    background: radial-gradient(circle at 50% 40%, #fff, var(--magenta) 60%, #6e0f48);
+    box-shadow: 0 0 10px var(--magenta), 0 0 2px #fff inset; border-color: #3b0a2c; }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     ★ THE EDGE ★  — pure CSS tethering between two anchors.
+     `min(anchor(A center), anchor(B center))` on every inset side yields the
+     bounding rectangle of the two port centers, in ANY drag direction.
+     --a / --b are set inline per edge to the two port anchor-names. */
+  .edge {
+    position: absolute;
+    top:    min(anchor(var(--a) center), anchor(var(--b) center));
+    left:   min(anchor(var(--a) center), anchor(var(--b) center));
+    right:  min(anchor(var(--a) center), anchor(var(--b) center));
+    bottom: min(anchor(var(--a) center), anchor(var(--b) center));
+    pointer-events: none;
+  }
+  .edge svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible;
+    filter: drop-shadow(0 0 5px #2de2e688); transition: filter .2s; }
+  /* JS toggles .flip to mirror the curve onto the other diagonal. */
+  .edge.flip svg { transform: scaleY(-1); transform-origin: center; }
+  .edge path {
+    fill: none; stroke: url(#edgeGrad); stroke-width: 3; stroke-linecap: round;
+    vector-effect: non-scaling-stroke;            /* keep stroke even when box is squashed */
+    stroke-dasharray: 7 9; animation: flow 1s linear infinite;
+  }
+  @keyframes flow { to { stroke-dashoffset: -16; } }
+
+  /* ── INSPECTOR POPOVER (anchor + Popover API) ──────────────────────────
+     One popover; JS sets which node it anchors to via position-anchor. */
+  .inspector {
+    margin: 10px; inset: auto; border: 1px solid var(--cyan); border-radius: 12px;
+    background: #0d1828ee; color: var(--ink); padding: 14px 16px; width: 230px;
+    box-shadow: 0 12px 50px #000a, 0 0 30px #2de2e622;
+    position-area: inline-end center;                 /* default: to the right of the node */
+    position-try-fallbacks: flip-inline, flip-block, flip-inline flip-block;
+    opacity: 0; transform: scale(.96); transition: opacity .16s, transform .16s, overlay .16s allow-discrete, display .16s allow-discrete;
+  }
+  .inspector:popover-open { opacity: 1; transform: scale(1); }
+  @starting-style { .inspector:popover-open { opacity: 0; transform: scale(.96); } }
+  .inspector h3 { margin: 0 0 6px; font-size: 14px; color: var(--cyan); }
+  .inspector p { margin: 4px 0; color: var(--muted); font-size: 12px; }
+  .inspector .close { all: unset; cursor: pointer; float: right; color: var(--muted); }
+  .inspector .close:hover { color: var(--ink); }
+
+  /* ── HUD ───────────────────────────────────────────────────────────────*/
+  .hud { position: fixed; top: 18px; left: 18px; max-width: 360px; pointer-events: none; z-index: 10; }
+  .hud h1 { font-size: 16px; margin: 0 0 6px; color: #fff; letter-spacing: .4px; }
+  .hud h1 b { color: var(--cyan); }
+  .hud p  { margin: 0 0 4px; color: var(--muted); font-size: 12px; }
+  .hud .kbd { color: var(--ink); }
+  .stat { position: fixed; bottom: 18px; left: 18px; z-index: 10; color: var(--muted); font-size: 12px; }
+  .stat b { color: var(--magenta); }
+
+  /* Feature-detection fallback */
+  .unsupported { display: none; position: fixed; inset: 0; place-items: center;
+    background: #0a0e14; color: var(--ink); text-align: center; padding: 40px; z-index: 99; }
+  @supports not (top: anchor(--x center)) { .unsupported { display: grid; } .canvas { filter: blur(3px); } }
+</style>
+</head>
+<body>
+
+<!-- shared gradient + glow, referenced by every edge via url(#edgeGrad) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="edgeGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0"   stop-color="#2de2e6" />
+      <stop offset="1"   stop-color="#ff3caa" />
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="hud">
+  <h1>CSS Anchor Positioning — <b>zero-JS edges</b></h1>
+  <p>Drag any node by its title bar. Every wire re-tethers itself.</p>
+  <p>The <span class="kbd">.edge</span> CSS pins one box between two port anchors. The browser does all the geometry.</p>
+  <p>Click a node's <span class="kbd">ⓘ</span> for an anchor-positioned popover.</p>
+</div>
+<div class="stat">edge geometry computed in JS: <b>0 lines</b> &nbsp;·&nbsp; drag + curve-flip only</div>
+
+<div class="canvas" id="canvas">
+
+  <!-- NODES (each: anchor-name for popover; ports with their own anchor-names) -->
+  <div class="node" id="n1" style="left:60px;  top:300px; anchor-name:--n1">
+    <div class="head"><span class="dot"></span><span class="label">Input</span><button class="info" data-node="n1">ⓘ</button></div>
+    <div class="body">stdin / file</div>
+    <div class="port out" style="anchor-name:--n1-out"></div>
+  </div>
+
+  <div class="node" id="n2" style="left:320px; top:300px; anchor-name:--n2">
+    <div class="head"><span class="dot"></span><span class="label">Parse</span><button class="info" data-node="n2">ⓘ</button></div>
+    <div class="body">tokens → AST</div>
+    <div class="port in"  style="anchor-name:--n2-in"></div>
+    <div class="port out" style="anchor-name:--n2-out"></div>
+  </div>
+
+  <div class="node" id="n3" style="left:600px; top:150px; anchor-name:--n3">
+    <div class="head"><span class="dot"></span><span class="label">Transform</span><button class="info" data-node="n3">ⓘ</button></div>
+    <div class="body">rewrite rules</div>
+    <div class="port in"  style="anchor-name:--n3-in"></div>
+    <div class="port out" style="anchor-name:--n3-out"></div>
+  </div>
+
+  <div class="node" id="n4" style="left:600px; top:470px; anchor-name:--n4">
+    <div class="head"><span class="dot"></span><span class="label">Validate</span><button class="info" data-node="n4">ⓘ</button></div>
+    <div class="body">schema check</div>
+    <div class="port in"  style="anchor-name:--n4-in"></div>
+    <div class="port out" style="anchor-name:--n4-out"></div>
+  </div>
+
+  <div class="node" id="n5" style="left:890px; top:300px; anchor-name:--n5">
+    <div class="head"><span class="dot"></span><span class="label">Render</span><button class="info" data-node="n5">ⓘ</button></div>
+    <div class="body">emit output</div>
+    <div class="port in"  style="anchor-name:--n5-in"></div>
+    <div class="port out" style="anchor-name:--n5-out"></div>
+  </div>
+
+  <div class="node" id="n6" style="left:1160px; top:300px; anchor-name:--n6">
+    <div class="head"><span class="dot"></span><span class="label">Output</span><button class="info" data-node="n6">ⓘ</button></div>
+    <div class="body">stdout / write</div>
+    <div class="port in"  style="anchor-name:--n6-in"></div>
+  </div>
+
+  <!-- EDGES — placed AFTER nodes so the anchors precede them in tree order.
+       Each just names two port anchors. No coordinates anywhere. -->
+  <div class="edge" data-a="n1" data-b="n2" style="--a:--n1-out; --b:--n2-in"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 C50,0 50,100 100,100"/></svg></div>
+  <div class="edge" data-a="n2" data-b="n3" style="--a:--n2-out; --b:--n3-in"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 C50,0 50,100 100,100"/></svg></div>
+  <div class="edge" data-a="n2" data-b="n4" style="--a:--n2-out; --b:--n4-in"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 C50,0 50,100 100,100"/></svg></div>
+  <div class="edge" data-a="n3" data-b="n5" style="--a:--n3-out; --b:--n5-in"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 C50,0 50,100 100,100"/></svg></div>
+  <div class="edge" data-a="n4" data-b="n5" style="--a:--n4-out; --b:--n5-in"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 C50,0 50,100 100,100"/></svg></div>
+  <div class="edge" data-a="n5" data-b="n6" style="--a:--n5-out; --b:--n6-in"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 C50,0 50,100 100,100"/></svg></div>
+
+</div>
+
+<div id="inspector" class="inspector" popover="manual">
+  <button class="close" id="inspClose">✕</button>
+  <h3 id="inspTitle">Node</h3>
+  <p id="inspBody"></p>
+  <p style="color:#2de2e6">position-anchor + position-try-fallbacks</p>
+</div>
+
+<div class="unsupported">
+  <div>
+    <h2>Your browser doesn't support CSS anchor positioning.</h2>
+    <p>Try Chrome 125+, Safari 26+, or Firefox 147+. The edges are pure CSS — nothing to fall back to.</p>
+  </div>
+</div>
+
+<script>
+/* ── JS does TWO things only: move nodes, and flip the curve's mirror.
+   It never positions an edge — the CSS `anchor()` rule does that. ──────── */
+const NODE_W = 160;
+const canvas = document.getElementById('canvas');
+
+// node positions kept in state so flip math needs no DOM reads
+const pos = {};
+document.querySelectorAll('.node').forEach(n => {
+  pos[n.id] = { x: parseFloat(n.style.left), y: parseFloat(n.style.top) };
+});
+
+// The only edge "math": pick which diagonal the curve is drawn on.
+// Ports sit on the box's main diagonal when sign(Δx) === sign(Δy), else anti.
+function updateFlips() {
+  document.querySelectorAll('.edge').forEach(e => {
+    const a = pos[e.dataset.a], b = pos[e.dataset.b];
+    const aPortX = a.x + NODE_W, aPortY = a.y;   // output port = right edge
+    const bPortX = b.x,          bPortY = b.y;   // input  port = left edge
+    e.classList.toggle('flip', (aPortX < bPortX) !== (aPortY < bPortY));
+  });
+}
+updateFlips();
+
+// drag
+let drag = null;
+document.querySelectorAll('.node .head').forEach(head => {
+  head.addEventListener('pointerdown', ev => {
+    if (ev.target.closest('.info')) return;
+    const node = head.closest('.node');
+    const r = canvas.getBoundingClientRect();
+    drag = { node, r, dx: ev.clientX - r.left - pos[node.id].x, dy: ev.clientY - r.top - pos[node.id].y };
+    node.classList.add('dragging');
+    head.setPointerCapture(ev.pointerId);
+  });
+});
+document.addEventListener('pointermove', ev => {
+  if (!drag) return;
+  const x = Math.max(0, Math.min(ev.clientX - drag.r.left - drag.dx, drag.r.width  - NODE_W));
+  const y = Math.max(0, Math.min(ev.clientY - drag.r.top  - drag.dy, drag.r.height - 90));
+  pos[drag.node.id] = { x, y };
+  drag.node.style.left = x + 'px';
+  drag.node.style.top  = y + 'px';
+  updateFlips();   // boolean toggle; the browser re-tethers the edges itself
+});
+document.addEventListener('pointerup', () => {
+  if (drag) { drag.node.classList.remove('dragging'); drag = null; }
+});
+
+// inspector popover — JS only chooses the anchor; CSS positions it
+const insp = document.getElementById('inspector');
+const blurbs = {
+  n1: 'Reads bytes. No upstream dependency.',
+  n2: 'Lexes then builds an AST. Fan-out to two consumers.',
+  n3: 'Applies rewrite rules to the tree.',
+  n4: 'Validates against a schema in parallel.',
+  n5: 'Joins both branches and renders.',
+  n6: 'Terminal sink. Writes the result.',
+};
+document.querySelectorAll('.info').forEach(btn => {
+  btn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const id = btn.dataset.node;
+    insp.style.positionAnchor = '--' + id;        // ← the whole positioning decision
+    document.getElementById('inspTitle').textContent = document.querySelector('#' + id + ' .label').textContent;
+    document.getElementById('inspBody').textContent = blurbs[id];
+    insp.showPopover();
+  });
+});
+document.getElementById('inspClose').addEventListener('click', () => insp.hidePopover());
+</script>
+</body>
+</html>

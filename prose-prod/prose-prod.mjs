@@ -212,7 +212,10 @@ function report(findings) {
     lines.push(`  [${finding.id}] ${excerpt}`);
     lines.push(`      law: ${finding.law}`);
   }
-  lines.push("Fix: rewrite the flagged sentences and finish the turn again.");
+  lines.push(
+    "Fix: emit ONLY the corrected sentences, one per line, each prefixed 'corrected: '." +
+      " The rest of the message is already in the transcript; repeating it burns tokens for nothing.",
+  );
   process.stderr.write(lines.join("\n") + "\n");
   process.exit(2);
 }

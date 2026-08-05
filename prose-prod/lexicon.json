@@ -1,0 +1,20 @@
+{
+  "decreed_stems": ["ground", "ruling", "honest", "distill"],
+  "empirical_stems": [],
+  "phrases": [
+    "it's worth noting",
+    "importantly",
+    "notably",
+    "in essence",
+    "essentially",
+    "robust",
+    "comprehensive",
+    "seamless",
+    "leverage",
+    "utilize",
+    "delve"
+  ],
+  "stem_allow": {
+    "ground": ["background", "groundwork", "underground", "playground", "homeground", "fairground", "campground", "foreground", "backgrounds", "groundbreaking"]
+  }
+}

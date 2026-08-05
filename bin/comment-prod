@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# comment-prod: objective comment-density gate for AI-written code.
+# A run of MORE THAN 2 consecutive comment lines among ADDED/new lines is a
+# violation. Exit 2 lists file:line for each violation (Claude Code blocking
+# contract); exit 0 = clean. No style opinions, no LLM judgment: pure counting.
+#
+# Modes:
+#   comment-prod --file <path>    grade one file's uncommitted added lines
+#                                 (untracked file = every line is added)
+#   comment-prod --cached         grade the staged diff (git pre-commit)
+#   comment-prod --hook           Claude Code PostToolUse: reads the hook JSON
+#                                 on stdin, extracts .tool_input.file_path
+#
+# Escapes, all deliberate and visible in the diff:
+#   - a run containing "@comment-ok:" with a reason passes (scanner-backed
+#     waiver, same family as @eprintln-ok)
+#   - test/spec/fixture/golden paths pass (fail-first receipts in test headers
+#     are mandated by repo law and legitimately exceed 2 lines)
+#   - non-code files pass (md, txt, json, locks)
+set -uo pipefail
+
+MAX_RUN=2
+
+is_exempt_path() {
+  case "$1" in
+    *.md|*.markdown|*.txt|*.json|*.lock|*.jsonl|*.csv|*.svg) return 0 ;;
+    *test*|*spec*|*fixture*|*golden*|*conformance*) return 0 ;;
+    */LICENSE*|*/node_modules/*|*/target/*|*/dist/*) return 0 ;;
+    */prolog/ARCH.pl) return 0 ;;
+  esac
+  return 1
+}
+
+# Reads "added" lines with their new-file line numbers from stdin as
+# "<lineno>\t<text>" and prints violations as "<file>:<start>-<end> (<n> lines)".
+grade_stream() {
+  local file="$1"
+  awk -F'\t' -v max="$MAX_RUN" -v file="$file" '
+    function flush() {
+      if (run > max && !waived) {
+        printf "%s:%d-%d (%d comment lines)\n", file, start, prev, run
+        bad = 1
+      }
+      run = 0; waived = 0
+    }
+    {
+      lineno = $1
+      text = $2
+      sub(/^[ \t]*/, "", text)
+      is_comment = (text ~ /^(\/\/|\/\*|\*( |$|\/)|#|--|%|;;)/)
+      if (is_comment) {
+        if (run == 0) start = lineno
+        else if (lineno != prev + 1) { flush(); start = lineno }
+        run++
+        prev = lineno
+        if (text ~ /@comment-ok:/) waived = 1
+      } else {
+        flush()
+      }
+    }
+    END { flush(); exit bad ? 2 : 0 }
+  '
+}
+
+# Emits "<lineno>\t<text>" for added lines of one file from a unified diff.
+added_lines_from_diff() {
+  awk '
+    /^@@/ { split($3, a, ","); n = substr(a[1], 2) - 1; next }
+    /^\+\+\+/ { next }
+    /^\+/ { n++; printf "%d\t%s\n", n, substr($0, 2); next }
+    /^-/ { next }
+    /^ / { n++ }
+  '
+}
+
+grade_file() {
+  local file="$1"
+  is_exempt_path "$file" && return 0
+  [ -f "$file" ] || return 0
+  local repo_root
+  repo_root="$(cd "$(dirname "$file")" && git rev-parse --show-toplevel 2>/dev/null)" || repo_root=""
+  if [ -n "$repo_root" ] && git -C "$repo_root" ls-files --error-unmatch "$file" >/dev/null 2>&1; then
+    git -C "$repo_root" diff HEAD --unified=0 -- "$file" | added_lines_from_diff | grade_stream "$file"
+  else
+    nl -ba -w1 -s$'\t' "$file" | grade_stream "$file"
+  fi
+}
+
+case "${1:-}" in
+  --file)
+    grade_file "$2"
+    ;;
+  --cached)
+    bad=0
+    while IFS= read -r f; do
+      is_exempt_path "$f" && continue
+      git diff --cached --unified=0 -- "$f" | added_lines_from_diff | grade_stream "$f" || bad=2
+    done < <(git diff --cached --name-only --diff-filter=ACM)
+    exit "$bad"
+    ;;
+  --hook)
+    path="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("file_path",""))' 2>/dev/null)"
+    [ -n "$path" ] || exit 0
+    out="$(grade_file "$path")"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      {
+        echo "COMMENT BUDGET VIOLATION (max $MAX_RUN consecutive comment lines in new code):"
+        echo "$out"
+        echo "Repo law: comments state only constraints the code cannot show."
+        echo "Fix: delete the narrative, keep at most $MAX_RUN lines, or carry '@comment-ok: <reason>' if a scanner-backed waiver truly applies."
+      } >&2
+      exit 2
+    fi
+    ;;
+  *)
+    echo "usage: comment-prod --file <path> | --cached | --hook" >&2
+    exit 1
+    ;;
+esac

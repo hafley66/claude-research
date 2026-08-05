@@ -77,6 +77,11 @@ const RULES = [
     law: "No negative parallelism (not X, Y / X. Not Y.). State the positive claim.",
   },
   {
+    id: "deictic-filler",
+    test: (sentence) => /^(Here'?s\b|Here (is|are)\b|Below (is|are)\b|The following\b)|\bas follows[:.]/i.test(sentence.trim()),
+    law: "No location announcements; the next words are the location. Point with file:line or names.",
+  },
+  {
     id: "hedge-slop",
     test: (sentence) => /\b(it'?s worth noting|importantly|notably|in essence|essentially|robust|comprehensive|seamless|leverag(?:e|es|ed|ing)|utiliz(?:e|es|ed|ing)|delve[sd]?)\b/i.test(sentence),
     law: "No hedge or slop phrasing.",

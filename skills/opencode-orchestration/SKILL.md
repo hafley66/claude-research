@@ -32,16 +32,34 @@ cd /path/to/worktree && opencode run \
 
 Flash = excellent brief-follower, weak skeptic. Brief quality is its ceiling.
 
+- PREFER flash over claude subagents for any discretely-scoped medium task
+  whose brief is well explained (user-set 2026-08-04, in service of shipping
+  a performant well-dogfooded product, not of the agents themselves); reserve
+  opus for diagnosis and mid-task trade-offs.
 - GIVE flash: mechanical sweeps, renames, format-perfect doc/ledger entries,
   config edits — with receipts, file ownership, exact validation commands,
   and style laws stated inline so zero judgment calls remain.
 - NEVER give flash: diagnosis, premise-doubting, wrong-layer risk. It fixed
   a non-bug and the wrong layer when the fed premise was wrong; opus lanes
   falsified 3 fed claims flash accepted. Diagnostic lanes go opus/codex.
+- REVIEW law (user-set 2026-08-04, "really judge the work... be scrutinous
+  on design dimensionality"): the coordinator's audit of a flash lane is a
+  DESIGN review, never a gate echo. Green gates prove the brief was followed;
+  they prove nothing about the brief. Re-derive at review: does the change
+  sit at the right seam, does the contract stay coherent from the other
+  side's view, what edge did the brief not enumerate, would a second caller
+  of the touched surface agree with the shape. Read the diff hunk by hunk;
+  own-run receipts; assume the lane did exactly what was asked and ask
+  whether the ask was right.
 - Tell it: "if reality deviates from this brief, STOP and report; do not
   improvise."
 
 ## Gotchas
+
+Every brief NAMES the package manager. Flash defaults to `npm install`,
+which in a pnpm/yarn repo rewrites the lockfile and un-dedupes types;
+say the right tool inline and audit the typecheck even when the lane
+REPORT claims green.
 
 Cold start ~0.2-0.5s/run. `opencode serve`/ACP/SDK only if you outgrow
 `run`. opencode.json `skills.paths` exposes claude-research + sprefa skills

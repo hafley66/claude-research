@@ -33,9 +33,36 @@ is_exempt_path() {
 
 # Reads "added" lines with their new-file line numbers from stdin as
 # "<lineno>\t<text>" and prints violations as "<file>:<start>-<end> (<n> lines)".
+# A shared marker union misread TS `#private` fields and CSS `--custom-props`.
+# Bracket classes stand in for backslashes, which awk -v eats before the regex.
+comment_regex_for() {
+  case "$1" in
+    *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.mts|*.cts|*.rs|*.go|*.java|*.kt|*.kts\
+    |*.c|*.h|*.cc|*.cpp|*.hpp|*.m|*.mm|*.swift|*.scala|*.dart|*.php|*.cs\
+    |*.proto|*.gradle|*.groovy|*.zig)
+      echo '^(//|/[*]|[*]( |$|/))' ;;
+    *.css|*.scss|*.sass|*.less)
+      echo '^(/[*]|[*]( |$|/)|//)' ;;
+    *.sh|*.bash|*.zsh|*.fish|*.py|*.rb|*.r|*.jl|*.nu\
+    |*.yaml|*.yml|*.toml|*.ini|*.cfg|*.conf|*.tf|*.nix\
+    |Dockerfile*|*/Dockerfile*|Makefile*|*/Makefile*|justfile|*/justfile)
+      echo '^#' ;;
+    *.sql|*.lua|*.hs|*.elm|*.adb|*.ads)
+      echo '^--' ;;
+    *.erl|*.tex)
+      echo '^%' ;;
+    *.lisp|*.el|*.clj|*.cljs|*.scm|*.rkt)
+      echo '^;' ;;
+    *.tsp|*.cue|*.graphql|*.gql)
+      echo '^(//|/[*]|[*]( |$|/)|#)' ;;
+    *)
+      echo '^(//|/[*]|[*]( |$|/)|#|--|%|;;)' ;;
+  esac
+}
+
 grade_stream() {
   local file="$1"
-  awk -F'\t' -v max="$MAX_RUN" -v file="$file" '
+  awk -F'\t' -v max="$MAX_RUN" -v file="$file" -v re="$(comment_regex_for "$file")" '
     function flush() {
       if (run > max && !waived) {
         printf "%s:%d-%d (%d comment lines)\n", file, start, prev, run
@@ -47,7 +74,7 @@ grade_stream() {
       lineno = $1
       text = $2
       sub(/^[ \t]*/, "", text)
-      is_comment = (text ~ /^(\/\/|\/\*|\*( |$|\/)|#|--|%|;;)/)
+      is_comment = (text ~ re)
       if (is_comment) {
         if (run == 0) start = lineno
         else if (lineno != prev + 1) { flush(); start = lineno }

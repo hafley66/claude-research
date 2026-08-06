@@ -14,18 +14,34 @@ function ids(findings) {
 
 test("every per-sentence rule fires at least once", () => {
   const doc = [
-    "An em dash — appears here.",
     "The provenance of the substrate is load-bearing in the regime.",
     "You're absolutely right, great question.",
     "u should check ur notes.",
-    "No.",
     "This isn't robust, it's fragile. That's the point.",
     "It's worth noting, importantly, notably, in essence, essentially, robust, comprehensive, seamless, leverage, utilize, delve.",
     "There were several findings, various signals, numerous cases, and a number of bugs.",
+    "No.",
   ].join("\n\n");
   const findings = grade(doc);
-  for (const id of ["em-dash", "banned-word", "sycophancy", "text-speak", "one-word-sentence", "neg-parallelism", "hedge-slop", "vague-quantity"]) {
+  for (const id of ["banned-word", "sycophancy", "text-speak", "one-word-sentence", "neg-parallelism", "hedge-slop", "vague-quantity"]) {
     assert.ok(count(findings, id) > 0, `rule ${id} should fire`);
+  }
+});
+
+test("a one-word sentence mid-turn is ordinary terseness", () => {
+  const findings = grade("Fixed. The frontier write moved back to phase 2 and the suite is green.");
+  assert.equal(count(findings, "one-word-sentence"), 0);
+});
+
+test("a one-word sentence closing the turn fires", () => {
+  const findings = grade("The suite is green. Fixed.");
+  assert.equal(count(findings, "one-word-sentence"), 1);
+});
+
+test("ordinals closing the turn are exempt", () => {
+  for (const closer of ["First.", "Second.", "Third.", "Finally.", "2nd."]) {
+    const findings = grade(`The steps run in order. ${closer}`);
+    assert.equal(count(findings, "one-word-sentence"), 0, `${closer} should be legal`);
   }
 });
 

@@ -44,11 +44,6 @@ const LEXICON = loadLexicon();
 
 const RULES = [
   {
-    id: "em-dash",
-    test: (sentence) => /—/.test(sentence),
-    law: "No em dashes.",
-  },
-  {
     id: "banned-word",
     test: (sentence) => /\b(provenance|substrate|load[- ]bearing|regime)s?\b/i.test(sentence),
     law: "Banned words: provenance, substrate, load-bearing, regime. Use source/base/critical/mode.",
@@ -62,11 +57,6 @@ const RULES = [
     id: "text-speak",
     test: (sentence) => /(^|[^\w'])(u|ur)([^\w']|$)/.test(sentence),
     law: "No text-speak pronouns: always you/your.",
-  },
-  {
-    id: "one-word-sentence",
-    test: (sentence) => /^[A-Za-z'-]+[.!]$/.test(sentence.trim()),
-    law: "No one-word sentences or dramatic punctuation flourishes.",
   },
   {
     id: "neg-parallelism",
@@ -148,11 +138,33 @@ function pairFindings(sentences) {
   return findings;
 }
 
+// Ordinals are structure markers, never flourishes, so they stay legal in the
+// closing position the one-word rule guards.
+const ORDINAL_WORDS = new Set([
+  "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
+  "ninth", "tenth", "next", "last", "finally",
+]);
+
+function isOrdinalSentence(sentence) {
+  const word = sentence.trim().replace(/[.!]$/, "").toLowerCase();
+  return ORDINAL_WORDS.has(word) || /^\d+(st|nd|rd|th)?$/.test(word);
+}
+
+// The one-word law bites on the TURN'S closing sentence, where a bare word
+// reads as a drum hit. Mid-turn a one-word sentence is ordinary terseness.
 function finalCloseFindings(lastSentence) {
+  const findings = [];
   if (/\b(The bottom line|At the end of the day|Simply put)\b/i.test(lastSentence)) {
-    return [{ id: "rhetorical-close", law: "No rhetorical closers; state the result and stop.", sentence: lastSentence }];
+    findings.push({ id: "rhetorical-close", law: "No rhetorical closers; state the result and stop.", sentence: lastSentence });
   }
-  return [];
+  if (/^[A-Za-z'-]+[.!]$/.test(lastSentence.trim()) && !isOrdinalSentence(lastSentence)) {
+    findings.push({
+      id: "one-word-sentence",
+      law: "No one-word sentence closing the turn; ordinals are exempt.",
+      sentence: lastSentence,
+    });
+  }
+  return findings;
 }
 
 // Seam: markdown to text node values; a future extract --lang md replaces this body.

@@ -17,7 +17,36 @@ Interactive default stays `zai-coding-plan/glm-4.6` (config `model`).
 ## Dispatch
 
 Spawn through `bus` so the lane lands in the registry and stays hailable.
-`bus lane` CREATES a lane; `bus dispatch` MESSAGES one that already exists.
+
+| verb | what it does |
+| --- | --- |
+| `bus lane` | register AND spawn. The first-contact verb. |
+| `bus dispatch` | spawn a tmux session running `--cmd`. `--cmd` is mandatory, so it ALWAYS calls `tmux new-session` and dies with `duplicate session: <name>` if one is live. Never a message. |
+| `bus hail --to <agent> --body <text>` | put a message in an agent's mailbox. |
+| `bus adopt` | rewrite registry metadata for an already-running process. |
+| `bus list` / `bus resolve` | read state. |
+
+`opencode run` is ONE-SHOT: it finishes its turn and exits. A mailbox hail
+reaches nothing after that. A second pass is a NEW spawn carrying the prior
+session so context survives:
+
+```bash
+opencode run -s <sessionID> -m <model> --auto "$(cat FOLLOWUP.md)"
+```
+
+Session id for a worktree:
+
+```bash
+sqlite3 ~/.local/share/opencode/opencode.db \
+  "SELECT id FROM session WHERE directory LIKE '%<lane>%' ORDER BY rowid DESC LIMIT 1;"
+```
+
+Wait for pass 1 to exit before spawning pass 2, or the tmux name collides:
+
+```bash
+until ! tmux list-panes -t <lane> -F '#{pane_current_command}' 2>/dev/null \
+  | grep -q opencode; do sleep 15; done
+```
 
 ```bash
 bus lane --cwd /abs/path/to/worktree --name <lane-id> \

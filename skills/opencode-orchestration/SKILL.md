@@ -16,9 +16,34 @@ Interactive default stays `zai-coding-plan/glm-4.6` (config `model`).
 
 ## Dispatch
 
+Spawn through `bus` so the lane lands in the registry and stays hailable.
+`bus lane` CREATES a lane; `bus dispatch` MESSAGES one that already exists.
+
+```bash
+bus lane --cwd /abs/path/to/worktree --name <lane-id> \
+  --harness opencode --mode auto \
+  --model openrouter/deepseek/deepseek-v4-flash-0731 \
+  --brief /abs/path/to/worktree/BRIEF.md \
+  --tmux <lane-id> --parent <coordinator-name>
+```
+
+- `--harness opencode` is MANDATORY. Omit it and the lane registers as
+  `claude`, bus hunts for a claude session at that cwd, prints
+  `unresolved <lane>: no claude session for <dir> yet`, and every later hail
+  misses. Verify with `bus list | grep <lane-id>`: the harness column reads
+  `opencode` or the lane is wrong.
+- `--brief` takes an ABSOLUTE path. A relative one resolves against the
+  coordinator's shell cwd, not the lane's, and the spawned body points at a
+  file that does not exist.
+- Repair a live lane's registration with `bus adopt --name <lane> --tmux
+  <session> --harness opencode --cwd <abs dir> --model <id> --mode auto`.
+  Adopt rewrites registry metadata only; re-running `bus lane` spawns a
+  SECOND agent into the same tmux session.
+- Raw spawn, only when the lane must stay out of the registry:
+
 ```bash
 cd /path/to/worktree && opencode run \
-  -m openrouter/deepseek/deepseek-v4-flash-0731 --auto "$(cat brief.md)" &
+  -m openrouter/deepseek/deepseek-v4-flash-0731 --auto "$(cat BRIEF.md)" &
 ```
 
 - `--auto` is mandatory in pipes (approval prompt hangs with no TTY).
@@ -27,10 +52,21 @@ cd /path/to/worktree && opencode run \
 - `--format json` = NDJSON per line; `-s <sessionID>` resume, `--fork` branch.
 - Usage/cost per lane: `~/.local/share/opencode/opencode.db` (message.data
   json: tokens.input/output/reasoning, cost). 5-lane night = ~$0.78.
+- Read progress with `tmux capture-pane -t <lane-id> -p | tail -20`.
 
 ## Flash doctrine (measured, plans/2026-08-02-flash-vs-opus-lane-report.md)
 
 Flash = excellent brief-follower, weak skeptic. Brief quality is its ceiling.
+
+- TWO-PASS LAW (user-set 2026-08-07): no lane output lands off one shot.
+  Coordinator plans the workflow, few coordinated lanes over many parallel
+  one-shots; flash for discretely confident tasks, opus for anything with
+  ambiguity that could punch us; every implementation pass is followed by a
+  named second pass (flash debur for style/dead-code/receipt sweep, coordinator
+  design-review before merge). Receipt for why: batchlab 2026-08-07, flash's
+  E3 reintroduced a prefilter its own brief's REPORT.md had measured as a
+  1.4x loss; an isolating control run by the coordinator saved the verdict.
+  Tell every pass-1 lane it is pass 1 of 2 so it favors plain code.
 
 - PREFER flash over claude subagents for any discretely-scoped medium task
   whose brief is well explained (user-set 2026-08-04, in service of shipping

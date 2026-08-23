@@ -6,6 +6,17 @@ trigger: opencode run, deepseek flash, flash lane, spawn deepseek, opencode work
 
 # opencode orchestration (current prefs, 2026-08-02)
 
+## BANNED FROM OPENCODE (user law 2026-08-11, enforced in boop)
+
+codex/gpt, claude, and gemini model families NEVER run through opencode:
+each has its own flat-rate-plan harness (codex = ChatGPT plan, claude =
+Agent tool, gemini = gemini CLI), and opencode routes them through metered
+API credit instead. Spell the BARE model name (`gpt-5.6-sol`, never
+`openrouter/openai/gpt-5.6-sol`) so `boop beep lane create` derives the
+plan harness. boop `lane.rs plan_harness_family` hard-bails these
+spellings at spawn, `--harness opencode` included, no override.
+Field receipt: two dead lanes + openrouter billing for gpt-5.6 models.
+
 ## The delegation model
 
 `openrouter/deepseek/deepseek-v4-flash-0731`, pinned in
@@ -14,17 +25,29 @@ trigger: opencode run, deepseek flash, flash lane, spawn deepseek, opencode work
 never the free route, never unpinned (other providers serve degraded quants).
 Interactive default stays `zai-coding-plan/glm-4.6` (config `model`).
 
-## Dispatch
+## Dispatch (boop doctrine, 2026-08-09)
 
-Spawn through `bus` so the lane lands in the registry and stays hailable.
+Spawn through `boop` (sprefa `v6/boop`, shim at
+`~/projects/claude-research/bin/boop` -> `target/release/boop`; rebuild with
+`cargo build --release` after merging boop PRs, the shim tracks the binary).
+Live-receipt verified 2026-08-09 end-to-end: worktree made at the base sha,
+flash lane ran and committed, completion hail landed with `from=<lane>` in the
+dispatch's own mailbox. Same `~/.agent/mail` mailbox as bus, so the instant
+strip renders boop lanes unchanged.
 
 | verb | what it does |
 | --- | --- |
-| `bus lane` | register AND spawn. The first-contact verb. |
-| `bus dispatch` | spawn a tmux session running `--cmd`. `--cmd` is mandatory, so it ALWAYS calls `tmux new-session` and dies with `duplicate session: <name>` if one is live. Never a message. |
-| `bus hail --to <agent> --body <text>` | put a message in an agent's mailbox. |
-| `bus adopt` | rewrite registry metadata for an already-running process. |
-| `bus list` / `bus resolve` | read state. |
+| `boop beep lane create --lane <id> --cwd <repo> --brief <abs> [--parent <coord>] [--branch <b> --base-sha <sha>] [--model <m>] [--tmux <name>] [--socket <s>] [--mail-dir <d>] [--dry-run]` | worktree + spawn + route, one shot. `--branch`+`--base-sha` = worktree mode at `<repo>/.boop-worktrees/<branch>`; `--parent` appends an on-exit hail `lane <id> done rc=$__rc` (lanes now REPORT COMPLETION). Harness defaults to opencode. |
+| `boop beep hail <lane> --body <text>` | lane route: handed to the ACP supervisor; `boop tui` pane: through the harness door (nothing typed), `--wait-timeout` returns when the recipient's turn ends. Ledger row in `agent_delivery`. |
+| `boop beep lane list/get/route/pane/patch/delete` | read/repair lane state (`patch` = old `bus adopt`). |
+| `boop beep message ack` | bulk-mark mail handled (NOT transcript-proven; see cass note). |
+| `boop beep ps` | pid, rss, cpu per lane. |
+| `boop db sync/usage/status` | ingest + token/cost accounting, native transcript reads. |
+
+Legacy: `bus` (instant scripts/bus.ts) still works against the same mailbox;
+`bus sweep`'s cass transcript-proof ack has NO boop equivalent yet, so
+proof-of-read still goes through cass until boop joins mail against its own
+transcript store.
 
 `opencode run` is ONE-SHOT: it finishes its turn and exits. A mailbox hail
 reaches nothing after that. A second pass is a NEW spawn carrying the prior
@@ -34,7 +57,8 @@ session so context survives:
 opencode run -s <sessionID> -m <model> --auto "$(cat FOLLOWUP.md)"
 ```
 
-Session id for a worktree:
+Session id for a worktree: `boop beep lane route <lane>` (route cwd is the
+worktree since 2026-08-09, so directory-join resolution hits). Raw fallback:
 
 ```bash
 sqlite3 ~/.local/share/opencode/opencode.db \
@@ -49,25 +73,20 @@ until ! tmux list-panes -t <lane> -F '#{pane_current_command}' 2>/dev/null \
 ```
 
 ```bash
-bus lane --cwd /abs/path/to/worktree --name <lane-id> \
-  --harness opencode --mode auto \
-  --model openrouter/deepseek/deepseek-v4-flash-0731 \
-  --brief /abs/path/to/worktree/BRIEF.md \
-  --tmux <lane-id> --parent <coordinator-name>
+boop beep lane create --lane <lane-id> --cwd /abs/repo \
+  --brief /abs/path/BRIEF.md --parent <coordinator-name> \
+  --branch <lane-branch> --base-sha <sha>
 ```
 
-- `--harness opencode` is MANDATORY. Omit it and the lane registers as
-  `claude`, bus hunts for a claude session at that cwd, prints
-  `unresolved <lane>: no claude session for <dir> yet`, and every later hail
-  misses. Verify with `bus list | grep <lane-id>`: the harness column reads
-  `opencode` or the lane is wrong.
+- Model defaults to the flash pin; `--harness` defaults to opencode. Always
+  `--dry-run` first and read the composed `cmd:` line — it is the literal
+  spawn (verified byte-true 2026-08-09).
 - `--brief` takes an ABSOLUTE path. A relative one resolves against the
   coordinator's shell cwd, not the lane's, and the spawned body points at a
   file that does not exist.
-- Repair a live lane's registration with `bus adopt --name <lane> --tmux
-  <session> --harness opencode --cwd <abs dir> --model <id> --mode auto`.
-  Adopt rewrites registry metadata only; re-running `bus lane` spawns a
-  SECOND agent into the same tmux session.
+- Repair a live lane's registration with `boop beep lane patch`. Patch
+  rewrites registry metadata only; re-running `lane create` spawns a SECOND
+  agent (tmux dies with `duplicate session` if the name is live).
 - Raw spawn, only when the lane must stay out of the registry:
 
 ```bash
@@ -87,6 +106,22 @@ cd /path/to/worktree && opencode run \
 
 Flash = excellent brief-follower, weak skeptic. Brief quality is its ceiling.
 
+- ROUTE-DEAD DAY (measured 2026-08-09, sprefa coordinator): 5 of 6 fresh
+  flash spawns produced ZERO files. Two signatures: instant silent death
+  (3-6 messages, clean exit) and ran-but-never-wrote (15-32 messages, no
+  disk writes — smells like opencode tool-execution failure, not provider
+  stall). Resumes recovered 2 of 5; the coordinator then declared the route
+  dead for the day and rerouted every remaining lane to in-process sonnet.
+  Rail: verify worktree change (never just process exit) on every lane; one
+  resume max; after TWO zero-file lanes in a day the route is dead, reroute
+  everything, stop paying the spawn tax. RCA probe (run 2026-08-09, same
+  day, ~4h after the deaths): trivial write-one-file brief PASSED on BOTH
+  paths — raw `opencode run` and `bus lane`/tmux — byte-exact file, clean
+  exits. The zero-file signature did not reproduce, so the cause was
+  transient (provider window or opencode transient), never a persistent
+  path defect; note one flash lane from the dead day later completed and
+  committed on its own (extract-prolog-refs bcc8e21e). Route usable again;
+  the liveness rail above stays mandatory on every lane.
 - TWO-PASS LAW (user-set 2026-08-07): no lane output lands off one shot.
   Coordinator plans the workflow, few coordinated lanes over many parallel
   one-shots; flash for discretely confident tasks, opus for anything with

@@ -10,7 +10,9 @@ CLI: `boop` (hafley-rs `crates/boop`; `~/.cargo/bin/boop`, rebuild with
 builds go to `~/.cache/boop/bin/boop-<branch>`).
 Mailbox: one sqlite store `~/.agent/boop.db`, tables `agent_mail` and
 `agent_route`. `--mail-dir` names the directory holding it.
-`boop --help` is the usage contract; read it before inventing a flag.
+`boop --help` is the usage contract and carries this whole primer (READ,
+FAVORITE, SHELL, IDENTITY, PRESETS, LAWS); read it before inventing a flag
+or writing SQL.
 
 ## Verbs (9)
 
@@ -19,12 +21,15 @@ Mailbox: one sqlite store `~/.agent/boop.db`, tables `agent_mail` and
 | `boop tui <harness>` | run an interactive TUI in this pane and register it (stamps `BOOP_SESSION`) |
 | `boop beep <route> <body>` | the one send; blocks for the answer |
 | `boop beep lane create` | worktree at base sha + spawn + route, one shot |
-| `boop beep lane list/get/route/pane/patch/delete` | lane registry |
+| `boop beep lane list/get/pane/patch/delete/prune` | lane registry; `list --all` adds unregistered tmux sessions and claude Agent-tool worktrees |
 | `boop beep agent register/done` | pane-less routes (native subagents, coordinators) |
-| `boop beep ps` / `pstree` | pid, rss, cpu per lane |
+| `boop beep paste <file> --route <r>\|--pane <t>` | file onto the OS pasteboard + the harness paste key in its pane (claude, codex: Ctrl+V take it as an image); otherwise the quoted path is typed |
+| `boop beep ps [<lane>]` | pid, rss, cpu per lane |
 | `boop wait <id-or-lane>` / `--me` | block on a reply, a lane's rc, or your next unread row |
 | `boop debug [<lane>]` | what just went wrong, grouped by lane |
-| `boop db "<sql>"` / `db sync/status/usage` | read the store |
+| `boop db search/sessions/lanes/mail/schema` | read the store without SQL (7-day default windows) |
+| `boop db "<sql>"` / `db sync/status/chat` | read the store |
+| `boop me favorite -1 [--note]` / `boop db favorite list` | pin and read favorites |
 | `boop whoami [--as]` / `boop config presets` | identity and model presets |
 
 ## Spawn
@@ -32,18 +37,28 @@ Mailbox: one sqlite store `~/.agent/boop.db`, tables `agent_mail` and
 ```bash
 boop beep lane create --branch feature/<name> --brief <abs> --preset <p> \
   [--goal <text>] [--wait [--wait-timeout <s>]] [--cwd <repo>] \
-  [--base-sha <sha>] [--parent <route>] [--harness <id>] [--dry-run]
+  [--base-sha <sha>] [--parent <route>] \
+  [--expect-path <rel>]... [--expect-commit-subject <text>]... \
+  [--expect-commits-at-least <n>] [--dry-run]
 ```
 
 - Model spelling is presets only: `boop config presets` lists name, harness,
-  model, effort, bin. Lane defaults: `flash4` or `pro4`; `luna`/`terra` for
-  codex; `k3` for kimi; `zsonnet`/`zfable` for claude through z.ai (`ccz`).
-  `gem37` is DEAD (gemini bills metered through opencode).
+  model, effort, bin. Lane defaults: `flash4` or `pro4`; `luna` for codex
+  (`sol` only on an explicit ask); `k3` for kimi; `glm53` for claude through
+  z.ai (`ccz`); `gem37` for gemini through opencode (allowed, user 2026-09-02;
+  only codex/gpt and claude families are refused through opencode).
 - The branch is the identity: `feature/schema-emit` gives lane and tmux
   `feature-schema-emit`, worktree `.boop-worktrees/feature/schema-emit`.
   Kinds `feature/ fix/ refactor/ chore/`, a convention the CLI prints.
 - Always `--dry-run` first; the `cmd:` line is the literal spawn.
 - Give each lane its own `CARGO_TARGET_DIR` (shared target dirs race).
+- Completion is typed: `--expect-path` (worktree file exists),
+  `--expect-commit-subject` (exact subject after base sha),
+  `--expect-commits-at-least <n>`. A clean exit with an unmet assertion is
+  rewritten to rc=4 with the failed assertions in the row's detail.
+- Brief rule: the lane works in `$PWD` (its worktree). Never write an
+  absolute `cd` to the primary checkout into a brief; a lane that does so
+  commits on main in the primary tree (lane-completion, 2026-08-25).
 
 ## Send and wait
 
@@ -61,7 +76,10 @@ Delivery ladder, one transition row per rung: door (claude socket, codex
 remote-control queue, opencode `prompt_async`) -> held-for-turn-boundary ->
 hook inbox -> pane paste (never for claude/codex routes) -> held-in-mailbox.
 Kimi has no door; spawn a lane. `boop wait <id>` prints the ladder walked.
-Exits: 0 reply or recipient's turn ended, 124 timeout, 3 route died.
+Exits: 0 reply or recipient's turn ended, 124 timeout, 3 route died,
+4 lane exited clean but an `--expect-*` assertion failed.
+`boop wait <lane>` reads result rows newer than the newest taken inbound row,
+so a stale result from an earlier run is skipped.
 The last line of every exit is the next command to run.
 
 ## Identity
@@ -103,5 +121,7 @@ panes included. Do not poll; `boop wait <lane>`.
 - `lane delete --state dead` removes each dead lane's own worktree and nothing
   above it; `--dry-run` first. Nothing in boop runs `rm -rf` on
   `.boop-worktrees`.
-- Session id for a lane: `boop beep lane route <lane>` (route cwd = the
+- Session id for a lane: `boop beep lane get <lane>` (route cwd = the
   worktree). Everything a lane did: `boop debug <lane>`.
+- Liveness for a pane-less route (native subagent, coordinator with no
+  pane) is measured from its parent; `lane list --all` shows it.

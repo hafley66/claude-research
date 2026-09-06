@@ -1,1 +1,1 @@
-20260609.0.datalog-v5-atlas-renderer-and-teaching.md
+20260906.0.grid-epics-column-dispatch-slice.md

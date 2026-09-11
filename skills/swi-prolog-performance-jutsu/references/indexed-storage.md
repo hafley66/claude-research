@@ -170,3 +170,36 @@ The reusable shape is an ordered view column rather than rebuilding the store
 after a logical transformation. Install the immutable base view once, layer the
 changed local view in the same scoped store, and encode precedence in clause
 order. See Sprefa receipt `v7/receipts/50_jiti_reservation_arena.md`.
+
+## DL7 shared graph lookup result
+
+Pending-edge lookup was shared by checker name resolution, reverse parent lookup,
+and lowerer callable-slot discovery. Their lists had different owning lifetimes,
+so one module supplied the same physical relation and query API while each checker
+or lowerer invocation opened its own immutable StoreId.
+
+```prolog
+arena_pending_edge(StoreId, Owner, Name, Target, Index, Sequence).
+arena_module_node(StoreId, Owner).
+```
+
+The nearest-shadow fixture measured 7,490 relevant lookups and 3,552,989 list
+cells before the change. Afterward all 7,490 lookups used JITI, with ten store
+builds, 3,620 pending-edge assertions, 514 module-node assertions, 2.27 ms total
+setup cost, and zero residual facts.
+
+Realized indexes matched the modes:
+
+- `(Owner, Name)` for forward lexical resolution;
+- `Target` plus deep indexing for reverse parent selection;
+- `(Owner, Index)` for callable slots;
+- `Owner` for module-node membership.
+
+Canonical output remained 810 rows with empty diagnostics. Median cold wall changed
+from 285 ms to 235 ms, a 17.5 percent reduction. Charged inferences changed from
+1,927,130 to 1,947,223, a 1.04 percent increase. Warm inferences remained 2,240.
+
+Store identity alone does not determine lifetime. Reuse the module and row shape,
+then open a fresh store whenever the logical edge snapshot can change. In DL7 this
+means one store per `lower_datalog/5` environment and one per `check_datalog/4`
+edge snapshot. See Sprefa receipt `v7/receipts/53_jiti_pending_edge_arena.md`.

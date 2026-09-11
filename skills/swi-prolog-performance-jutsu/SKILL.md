@@ -59,6 +59,13 @@ Common measured shapes:
 - Dynamic row lookup with a free leading argument defeating JITI.
 - An unbound closure sweep publishing internal helper relations.
 
+When Prolog lists are acting as tables and repeated `memberchk/2` calls scan
+them, read [references/indexed-storage.md](references/indexed-storage.md)
+before designing an assoc or manual hash layer. SWI dynamic predicates use
+JITI across multiple arguments and support deep indexing into compound terms.
+Measure build lifetime, clause order, duplicate behavior, cleanup, JITI shape,
+C-level scan work, charged inferences, wall time, and memory separately.
+
 For fixes and concrete Prolog shapes, read
 [references/measured-patterns.md](references/measured-patterns.md).
 That reference also covers whole-bag rescans, overlapping proof paths, callback

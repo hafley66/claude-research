@@ -142,3 +142,31 @@ lifetime, rather than call count alone.
 
 See Sprefa receipts `v7/receipts/45_swi_indexing_storage_lab.md` and
 `v7/receipts/46_jiti_stratum_arena.md`.
+
+## DL7 reservation lookup result
+
+The next integrated slice indexed lexical reservations at the owning
+`lower_datalog/5` boundary. Baseline attribution found 2,070 lookups examining
+692,571 list cells. One store held two ordered views under one StoreId:
+
+```text
+visible  = local declarations before alias promotion + imported declarations
+promoted = local declarations after alias promotion
+lookup   = promoted first, then visible, then lexical parent
+```
+
+This retained the existing product-first and first-match behavior while storing
+each input list once. The nearest-shadow fixture performed six store builds,
+1,044 visible assertions, 818 promoted-view assertions, 2,070 JITI lookups, zero
+list fallbacks inside the boundary, and zero residual facts.
+
+Canonical output stayed at 810 rows with empty diagnostics. Median cold wall
+changed from 329.5 ms to 293.5 ms, a 10.9 percent reduction. Charged inferences
+changed from 1,909,640 to 1,927,130, a 0.92 percent increase. This is another
+case where removing C-level list scans improves wall time while bookkeeping
+raises the inference counter.
+
+The reusable shape is an ordered view column rather than rebuilding the store
+after a logical transformation. Install the immutable base view once, layer the
+changed local view in the same scoped store, and encode precedence in clause
+order. See Sprefa receipt `v7/receipts/50_jiti_reservation_arena.md`.

@@ -61,6 +61,9 @@ Common measured shapes:
 
 For fixes and concrete Prolog shapes, read
 [references/measured-patterns.md](references/measured-patterns.md).
+That reference also covers whole-bag rescans, overlapping proof paths, callback
+qualification, finalizer failures, and subprocess pipe lifecycles. Its V7 audit
+evidence link contains measured examples, not universal performance budgets.
 
 ## Semantic gates
 

@@ -117,3 +117,28 @@ compile scope -> build relation store once -> all checker/comptime users -> clea
 
 See Sprefa receipts `v7/receipts/42_prolog_arena_inventory.md` and
 `v7/receipts/43_origin_index.md` for the measured attribution.
+
+## DL7 JITI arena measurements
+
+One controlled DL7-shaped workload used 34,497 keyed reads over origins,
+reservations, edges, relations, and strata. Dynamic facts plus JITI preserved
+the first-match checksum and completed lookup in 35 ms and 242,371 charged
+inferences. The list baseline took 246 ms and 311,365 charged inferences while
+examining about 6.3 million list cells. Assoc took 42 ms and 345,862 inferences;
+red-black trees took 69 ms and 1,093,827 inferences; recorded storage took
+643 ms. Variant tabling changed duplicate-first behavior.
+
+The first integrated slice replaced 18,921 `relation_level/3` list scans with
+an evaluation-lifetime `arena_stratum/3` dynamic predicate. It retained source
+assertion order, an explicit arena id, nested and concurrent isolation, and
+unconditional cleanup. `jiti_list/1` observed a realized hash index with 256
+buckets and speedup 200.0. Canonical compiler output remained byte-identical.
+
+That slice changed cold inferences by +343 and established no wall reduction.
+Removing a scan is an intermediate measurement. Require a compiler-level wall
+or inference reduction before extending an indexed arena to another collection.
+Choose the next collection from measured `list cells examined`, key modes, and
+lifetime, rather than call count alone.
+
+See Sprefa receipts `v7/receipts/45_swi_indexing_storage_lab.md` and
+`v7/receipts/46_jiti_stratum_arena.md`.

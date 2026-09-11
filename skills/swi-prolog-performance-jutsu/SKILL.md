@@ -33,6 +33,11 @@ instructions. Report both inferences and produced rows.
 - Canonical term output plus byte comparison for semantic parity.
 - Opt-in phase tracing whose metrics are collected outside the timed body.
 
+For engine behavior that changes storage and measurement choices, read
+[references/swi-runtime-behavior.md](references/swi-runtime-behavior.md). It covers
+JITI activation and invalidation, logical-update generations, table ordering,
+garbage collection, profiler resolution, and version-sensitive determinism.
+
 Label process-global table counters as global. SWI does not expose every counter per
 relation. Do not present a process-global duplicate count as relation-local evidence.
 
@@ -86,6 +91,10 @@ Before changing evaluation or scheduling, pin:
 - thread or evaluation-ID isolation where mutable state exists.
 
 A hash selects a bucket. Full-term equality decides a memo hit.
+
+Record the SWI version beside inference and determinism gates. Engine releases can
+change clause selection, charged inferences, and whether an indexed call leaves a
+choice point.
 
 Keep tests smaller than the compiler budget they protect. If one test exceeds the
 budget, split setup from assertions or use a smaller semantic fixture. Never hide the

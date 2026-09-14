@@ -1,0 +1,198 @@
+vars: { d2-config: { layout-engine: dagre; pad: 32 } }
+direction: down
+n0: "Data / observation"
+n1: "Control / command"
+n2: "Identity / reference"
+n3: "Success / live"
+n4: "Failure / closed"
+n0 -> n4: "failure"
+n5: "Warning / unresolved"
+n1 -> n5: "warning"
+n6: "Storage / durable"
+n2 -> n6: "storage"
+n7: "Inactive / deferred"
+n3 -> n7: "inactive"
+n8: "Data / observation"
+n4 -> n8: "data"
+n9: "Control / command"
+n5 -> n9: "control"
+n10: "Identity / reference"
+n6 -> n10: "identity"
+n11: "Success / live"
+n7 -> n11: "success"
+n12: "Failure / closed"
+n8 -> n12: "failure"
+n13: "Warning / unresolved"
+n9 -> n13: "warning"
+n14: "Storage / durable"
+n10 -> n14: "storage"
+n15: "Inactive / deferred"
+n11 -> n15: "inactive"
+
+# D2 theme kit: midnight / categorical
+vars: { d2-config: { theme-id: 200; theme-overrides: { N1: "#edf3f8"; N2: "#edf3f8"; N3: "#edf3f8"; N4: "#c0cce0"; N5: "#1d252d"; N6: "#1d252d"; N7: "#101820"; B1: "#67d5e8"; B2: "#67d5e8"; B3: "#67d5e8"; B4: "#1d252d"; B5: "#1d252d"; B6: "#1d252d"; AA2: "#ffc66d"; AA4: "#1d252d"; AA5: "#1d252d"; AB4: "#1d252d"; AB5: "#1d252d" } } }
+style.fill: "#101820"
+classes: {
+  kit_c0: { style.fill: "#1b313a"; style.stroke: "#67d5e8"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c0: { style.stroke: "#67d5e8"; style.font-color: "#67d5e8"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c1: { style.fill: "#2f2f2a"; style.stroke: "#ffc66d"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c1: { style.stroke: "#ffc66d"; style.font-color: "#ffc66d"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c2: { style.fill: "#212e3d"; style.stroke: "#91c4ff"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c2: { style.stroke: "#91c4ff"; style.font-color: "#91c4ff"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c3: { style.fill: "#23312d"; style.stroke: "#a5dc83"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c3: { style.stroke: "#a5dc83"; style.font-color: "#a5dc83"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c4: { style.fill: "#2f292d"; style.stroke: "#ff9784"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c4: { style.stroke: "#ff9784"; style.font-color: "#ff9784"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c5: { style.fill: "#2c302d"; style.stroke: "#e5d482"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c5: { style.stroke: "#e5d482"; style.font-color: "#e5d482"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c6: { style.fill: "#1d3133"; style.stroke: "#75d9b0"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c6: { style.stroke: "#75d9b0"; style.font-color: "#75d9b0"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c7: { style.fill: "#272f39"; style.stroke: "#c0cce0"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c7: { style.stroke: "#c0cce0"; style.font-color: "#c0cce0"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c8: { style.fill: "#2d2b2b"; style.stroke: "#f2ad78"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c8: { style.stroke: "#f2ad78"; style.font-color: "#f2ad78"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c9: { style.fill: "#1f2f37"; style.stroke: "#86cad4"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c9: { style.stroke: "#86cad4"; style.font-color: "#86cad4"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c10: { style.fill: "#26302a"; style.stroke: "#bcd16d"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c10: { style.stroke: "#bcd16d"; style.font-color: "#bcd16d"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c11: { style.fill: "#262c3c"; style.stroke: "#b7b5fb"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c11: { style.stroke: "#b7b5fb"; style.font-color: "#b7b5fb"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c12: { style.fill: "#2b2d31"; style.stroke: "#e2bda5"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c12: { style.stroke: "#e2bda5"; style.font-color: "#e2bda5"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c13: { style.fill: "#1e2c3b"; style.stroke: "#7eb5ef"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c13: { style.stroke: "#7eb5ef"; style.font-color: "#7eb5ef"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c14: { style.fill: "#293231"; style.stroke: "#d4dfa4"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c14: { style.stroke: "#d4dfa4"; style.font-color: "#d4dfa4"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c15: { style.fill: "#282f36"; style.stroke: "#c5c9cb"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c15: { style.stroke: "#c5c9cb"; style.font-color: "#c5c9cb"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_data: { style.fill: "#1b313a"; style.stroke: "#67d5e8"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_data: { style.stroke: "#67d5e8"; style.font-color: "#67d5e8"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_control: { style.fill: "#2f2f2a"; style.stroke: "#ffc66d"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_control: { style.stroke: "#ffc66d"; style.font-color: "#ffc66d"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_identity: { style.fill: "#212e3d"; style.stroke: "#91c4ff"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_identity: { style.stroke: "#91c4ff"; style.font-color: "#91c4ff"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_success: { style.fill: "#23312d"; style.stroke: "#a5dc83"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_success: { style.stroke: "#a5dc83"; style.font-color: "#a5dc83"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_failure: { style.fill: "#2f292d"; style.stroke: "#ff9784"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_failure: { style.stroke: "#ff9784"; style.font-color: "#ff9784"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_warning: { style.fill: "#2c302d"; style.stroke: "#e5d482"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_warning: { style.stroke: "#e5d482"; style.font-color: "#e5d482"; style.stroke-width: 3; style.stroke-dash: 3 }
+  kit_storage: { style.fill: "#1d3133"; style.stroke: "#75d9b0"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_storage: { style.stroke: "#75d9b0"; style.font-color: "#75d9b0"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_inactive: { style.fill: "#272f39"; style.stroke: "#c0cce0"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_inactive: { style.stroke: "#c0cce0"; style.font-color: "#c0cce0"; style.stroke-width: 3; style.stroke-dash: 5 }
+}
+
+# Explicit group assignments
+n0.style.stroke: "#67d5e8"
+n0.style.stroke-width: 2
+n0.style.fill: "#1b313a"
+n0.style.font-color: "#edf3f8"
+n1.style.stroke: "#ffc66d"
+n1.style.stroke-width: 2
+n1.style.fill: "#2f2f2a"
+n1.style.font-color: "#edf3f8"
+n2.style.stroke: "#91c4ff"
+n2.style.stroke-width: 2
+n2.style.fill: "#212e3d"
+n2.style.font-color: "#edf3f8"
+n3.style.stroke: "#a5dc83"
+n3.style.stroke-width: 2
+n3.style.fill: "#23312d"
+n3.style.font-color: "#edf3f8"
+n4.style.stroke: "#ff9784"
+n4.style.stroke-width: 2
+n4.style.fill: "#2f292d"
+n4.style.font-color: "#edf3f8"
+(n0 -> n4)[0].style.stroke: "#ff9784"
+(n0 -> n4)[0].style.stroke-width: 3
+(n0 -> n4)[0].style.font-color: "#ff9784"
+(n0 -> n4)[0].style.stroke-dash: 0
+n5.style.stroke: "#e5d482"
+n5.style.stroke-width: 2
+n5.style.fill: "#2c302d"
+n5.style.font-color: "#edf3f8"
+(n1 -> n5)[0].style.stroke: "#e5d482"
+(n1 -> n5)[0].style.stroke-width: 3
+(n1 -> n5)[0].style.font-color: "#e5d482"
+(n1 -> n5)[0].style.stroke-dash: 3
+n6.style.stroke: "#75d9b0"
+n6.style.stroke-width: 2
+n6.style.fill: "#1d3133"
+n6.style.font-color: "#edf3f8"
+(n2 -> n6)[0].style.stroke: "#75d9b0"
+(n2 -> n6)[0].style.stroke-width: 3
+(n2 -> n6)[0].style.font-color: "#75d9b0"
+(n2 -> n6)[0].style.stroke-dash: 0
+n7.style.stroke: "#c0cce0"
+n7.style.stroke-width: 2
+n7.style.fill: "#272f39"
+n7.style.font-color: "#edf3f8"
+(n3 -> n7)[0].style.stroke: "#c0cce0"
+(n3 -> n7)[0].style.stroke-width: 3
+(n3 -> n7)[0].style.font-color: "#c0cce0"
+(n3 -> n7)[0].style.stroke-dash: 5
+n8.style.stroke: "#67d5e8"
+n8.style.stroke-width: 2
+n8.style.fill: "#1b313a"
+n8.style.font-color: "#edf3f8"
+(n4 -> n8)[0].style.stroke: "#67d5e8"
+(n4 -> n8)[0].style.stroke-width: 3
+(n4 -> n8)[0].style.font-color: "#67d5e8"
+(n4 -> n8)[0].style.stroke-dash: 0
+n9.style.stroke: "#ffc66d"
+n9.style.stroke-width: 2
+n9.style.fill: "#2f2f2a"
+n9.style.font-color: "#edf3f8"
+(n5 -> n9)[0].style.stroke: "#ffc66d"
+(n5 -> n9)[0].style.stroke-width: 3
+(n5 -> n9)[0].style.font-color: "#ffc66d"
+(n5 -> n9)[0].style.stroke-dash: 0
+n10.style.stroke: "#91c4ff"
+n10.style.stroke-width: 2
+n10.style.fill: "#212e3d"
+n10.style.font-color: "#edf3f8"
+(n6 -> n10)[0].style.stroke: "#91c4ff"
+(n6 -> n10)[0].style.stroke-width: 3
+(n6 -> n10)[0].style.font-color: "#91c4ff"
+(n6 -> n10)[0].style.stroke-dash: 0
+n11.style.stroke: "#a5dc83"
+n11.style.stroke-width: 2
+n11.style.fill: "#23312d"
+n11.style.font-color: "#edf3f8"
+(n7 -> n11)[0].style.stroke: "#a5dc83"
+(n7 -> n11)[0].style.stroke-width: 3
+(n7 -> n11)[0].style.font-color: "#a5dc83"
+(n7 -> n11)[0].style.stroke-dash: 0
+n12.style.stroke: "#ff9784"
+n12.style.stroke-width: 2
+n12.style.fill: "#2f292d"
+n12.style.font-color: "#edf3f8"
+(n8 -> n12)[0].style.stroke: "#ff9784"
+(n8 -> n12)[0].style.stroke-width: 3
+(n8 -> n12)[0].style.font-color: "#ff9784"
+(n8 -> n12)[0].style.stroke-dash: 0
+n13.style.stroke: "#e5d482"
+n13.style.stroke-width: 2
+n13.style.fill: "#2c302d"
+n13.style.font-color: "#edf3f8"
+(n9 -> n13)[0].style.stroke: "#e5d482"
+(n9 -> n13)[0].style.stroke-width: 3
+(n9 -> n13)[0].style.font-color: "#e5d482"
+(n9 -> n13)[0].style.stroke-dash: 3
+n14.style.stroke: "#75d9b0"
+n14.style.stroke-width: 2
+n14.style.fill: "#1d3133"
+n14.style.font-color: "#edf3f8"
+(n10 -> n14)[0].style.stroke: "#75d9b0"
+(n10 -> n14)[0].style.stroke-width: 3
+(n10 -> n14)[0].style.font-color: "#75d9b0"
+(n10 -> n14)[0].style.stroke-dash: 0
+n15.style.stroke: "#c0cce0"
+n15.style.stroke-width: 2
+n15.style.fill: "#272f39"
+n15.style.font-color: "#edf3f8"
+(n11 -> n15)[0].style.stroke: "#c0cce0"
+(n11 -> n15)[0].style.stroke-width: 3
+(n11 -> n15)[0].style.font-color: "#c0cce0"
+(n11 -> n15)[0].style.stroke-dash: 5

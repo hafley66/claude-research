@@ -1,0 +1,99 @@
+# house.d2 — the shared stylesheet. Import it with `...@house` on line 1 of a
+# diagram, then use the class names below instead of inlining any style map.
+# Legacy light preset. New multi-theme/category/edge kit: theme-kit/README.md.
+# Import theme-kit/2_presets/midnight_categorical for the dark 16-color preset.
+
+vars: {
+  d2-config: {
+    layout-engine: dagre
+    theme-id: 0
+    pad: 20
+  }
+
+  palette: {
+    green-fill: "#e6f4ea"
+    green-line: "#137333"
+    green-text: "#0b3d1f"
+    blue-fill: "#e8f0fe"
+    blue-line: "#1967d2"
+    blue-text: "#0b3d6b"
+    red-fill: "#fce8e6"
+    red-line: "#c5221f"
+    red-text: "#7f1d1b"
+    gold-fill: "#fef7e0"
+    gold-line: "#b06000"
+    gold-text: "#5c3200"
+    grey-fill: "#f1f3f4"
+    grey-line: "#5f6368"
+    grey-text: "#202124"
+    code-fill: "#f6f8fa"
+    code-line: "#d0d7de"
+    code-text: "#24292f"
+    frame-fill: "#fafafa"
+    frame-line: "#9aa0a6"
+  }
+}
+
+# Every class that sets a fill also sets a font-color; a light fill with the
+# theme's default text is the commonest unreadable diagram.
+classes: {
+  shipped: {
+    style.fill: "#e6f4ea"
+    style.stroke: "#137333"
+    style.stroke-width: 2
+    style.font-color: "#0b3d1f"
+  }
+
+  designed: {
+    style.fill: "#e8f0fe"
+    style.stroke: "#1967d2"
+    style.stroke-width: 2
+    style.stroke-dash: 4
+    style.font-color: "#0b3d6b"
+  }
+
+  danger: {
+    style.fill: "#fce8e6"
+    style.stroke: "#c5221f"
+    style.stroke-width: 2
+    style.font-color: "#7f1d1b"
+  }
+
+  chosen: {
+    style.fill: "#fef7e0"
+    style.stroke: "#b06000"
+    style.stroke-width: 3
+    style.shadow: true
+    style.font-color: "#5c3200"
+  }
+
+  muted: {
+    style.fill: "#f1f3f4"
+    style.stroke: "#5f6368"
+    style.font-color: "#202124"
+  }
+
+  src: {
+    style.fill: "#f6f8fa"
+    style.stroke: "#d0d7de"
+    style.font-color: "#24292f"
+  }
+
+  # One numbered container per stage. Edges run stage N to stage N+1.
+  stage: {
+    style.fill: "#fafafa"
+    style.stroke: "#9aa0a6"
+    style.font-color: "#202124"
+  }
+
+  # A markdown label implies shape: text, so a note that wants a border says so.
+  note: {
+    shape: rectangle
+    style.fill: "#f6f8fa"
+    style.stroke: "#d0d7de"
+    style.font-color: "#24292f"
+  }
+}
+
+# A sql_table gets NO class: style.fill and style.stroke both paint its ROWS,
+# which hides the column names. Put the accent on a container wrapped round it.

@@ -1,0 +1,175 @@
+{
+  "theme": "midnight",
+  "palette": "categorical",
+  "mode": "semantic",
+  "assignments": [
+    {
+      "target": "n0",
+      "kind": "node",
+      "group": "data",
+      "role": "data"
+    },
+    {
+      "target": "n1",
+      "kind": "node",
+      "group": "control",
+      "role": "control"
+    },
+    {
+      "target": "n2",
+      "kind": "node",
+      "group": "identity",
+      "role": "identity"
+    },
+    {
+      "target": "n3",
+      "kind": "node",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "n4",
+      "kind": "node",
+      "group": "failure",
+      "role": "failure"
+    },
+    {
+      "target": "(n0 -> n4)[0]",
+      "kind": "edge",
+      "group": "failure",
+      "role": "failure"
+    },
+    {
+      "target": "n5",
+      "kind": "node",
+      "group": "warning",
+      "role": "warning"
+    },
+    {
+      "target": "(n1 -> n5)[0]",
+      "kind": "edge",
+      "group": "warning",
+      "role": "warning"
+    },
+    {
+      "target": "n6",
+      "kind": "node",
+      "group": "storage",
+      "role": "storage"
+    },
+    {
+      "target": "(n2 -> n6)[0]",
+      "kind": "edge",
+      "group": "storage",
+      "role": "storage"
+    },
+    {
+      "target": "n7",
+      "kind": "node",
+      "group": "inactive",
+      "role": "inactive"
+    },
+    {
+      "target": "(n3 -> n7)[0]",
+      "kind": "edge",
+      "group": "inactive",
+      "role": "inactive"
+    },
+    {
+      "target": "n8",
+      "kind": "node",
+      "group": "data",
+      "role": "data"
+    },
+    {
+      "target": "(n4 -> n8)[0]",
+      "kind": "edge",
+      "group": "data",
+      "role": "data"
+    },
+    {
+      "target": "n9",
+      "kind": "node",
+      "group": "control",
+      "role": "control"
+    },
+    {
+      "target": "(n5 -> n9)[0]",
+      "kind": "edge",
+      "group": "control",
+      "role": "control"
+    },
+    {
+      "target": "n10",
+      "kind": "node",
+      "group": "identity",
+      "role": "identity"
+    },
+    {
+      "target": "(n6 -> n10)[0]",
+      "kind": "edge",
+      "group": "identity",
+      "role": "identity"
+    },
+    {
+      "target": "n11",
+      "kind": "node",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "(n7 -> n11)[0]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "n12",
+      "kind": "node",
+      "group": "failure",
+      "role": "failure"
+    },
+    {
+      "target": "(n8 -> n12)[0]",
+      "kind": "edge",
+      "group": "failure",
+      "role": "failure"
+    },
+    {
+      "target": "n13",
+      "kind": "node",
+      "group": "warning",
+      "role": "warning"
+    },
+    {
+      "target": "(n9 -> n13)[0]",
+      "kind": "edge",
+      "group": "warning",
+      "role": "warning"
+    },
+    {
+      "target": "n14",
+      "kind": "node",
+      "group": "storage",
+      "role": "storage"
+    },
+    {
+      "target": "(n10 -> n14)[0]",
+      "kind": "edge",
+      "group": "storage",
+      "role": "storage"
+    },
+    {
+      "target": "n15",
+      "kind": "node",
+      "group": "inactive",
+      "role": "inactive"
+    },
+    {
+      "target": "(n11 -> n15)[0]",
+      "kind": "edge",
+      "group": "inactive",
+      "role": "inactive"
+    }
+  ]
+}

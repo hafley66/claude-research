@@ -21,6 +21,20 @@ triggers:
 
 # d2-authoring
 
+## Reusable theme kit
+
+For new diagrams and readability fixes, read [theme-kit/README.md](theme-kit/README.md).
+Use its three canvases, 16-color or 8-color category palettes, and separate node/edge
+classes. Assign colors by semantic role, group round-robin, or seeded shuffle.
+Keep role/group labels and meaningful edge dash patterns alongside color.
+Use the composer to produce self-contained D2 for Markdown fences in Instant;
+the CLI can import the generated presets directly. Inspect the gallery before
+choosing a theme. `house.d2` remains the legacy light stylesheet.
+
+When extending the kit, edit `theme-kit/0_palettes.mjs` and `1_theme.mjs`, then run
+its tests and gallery generator. Do not hand-edit generated presets. Accent SQL
+wrapper containers and relationships, leaving table body colors to D2's theme.
+
 Receipts: every behavior marked **[verified]** was executed against `d2 0.7.1` and
 `@terrastruct/d2@0.1.33` (research agent, 2026-08-04). Everything else carries a doc URL.
 
@@ -460,7 +474,7 @@ Pin both:
 | tiering | one numbered container per stage, edges from stage N to stage N+1. An edge skipping two stages means the stages are wrong. |
 | sql_table | never carries `style.fill` or `style.stroke`; stroke paints the ROWS. Put the accent on a wrapper container. |
 | every class that sets `fill` | also sets `style.font-color`. |
-| theme | `theme-id: 0` (Neutral Default). `300` (Terminal) for anything mostly code. `303` (C4) for C4 diagrams. |
+| theme | Use `theme-kit/` presets for dark/light canvases and categorical or semantic accents. Pin a built-in theme for unstyled SQL/code bodies; `300` (Terminal) for code and `303` for C4 remain available. |
 | config | always pin `vars.d2-config` in the file. Never depend on CLI flags for appearance. |
 | code fence | ``|`lang ... `|`` by default. `|~lang ... ~|` when the snippet contains `` `| ``. |
 | snippet width | hard-wrap at 55 columns, elide bodies with `// ...`. |

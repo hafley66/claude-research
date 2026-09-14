@@ -1,0 +1,188 @@
+{
+  "theme": "midnight",
+  "palette": "clear",
+  "mode": "shuffle",
+  "seed": 42,
+  "assignments": [
+    {
+      "target": "n0",
+      "kind": "node",
+      "group": "Group 01"
+    },
+    {
+      "target": "n1",
+      "kind": "node",
+      "group": "Group 02"
+    },
+    {
+      "target": "n2",
+      "kind": "node",
+      "group": "Group 03"
+    },
+    {
+      "target": "n3",
+      "kind": "node",
+      "group": "Group 04"
+    },
+    {
+      "target": "n4",
+      "kind": "node",
+      "group": "Group 05"
+    },
+    {
+      "target": "(n0 -> n4)[0]",
+      "kind": "edge",
+      "group": "Group 05"
+    },
+    {
+      "target": "n5",
+      "kind": "node",
+      "group": "Group 06"
+    },
+    {
+      "target": "(n1 -> n5)[0]",
+      "kind": "edge",
+      "group": "Group 06"
+    },
+    {
+      "target": "n6",
+      "kind": "node",
+      "group": "Group 07"
+    },
+    {
+      "target": "(n2 -> n6)[0]",
+      "kind": "edge",
+      "group": "Group 07"
+    },
+    {
+      "target": "n7",
+      "kind": "node",
+      "group": "Group 08"
+    },
+    {
+      "target": "(n3 -> n7)[0]",
+      "kind": "edge",
+      "group": "Group 08"
+    },
+    {
+      "target": "n8",
+      "kind": "node",
+      "group": "Group 09"
+    },
+    {
+      "target": "(n4 -> n8)[0]",
+      "kind": "edge",
+      "group": "Group 09"
+    },
+    {
+      "target": "n9",
+      "kind": "node",
+      "group": "Group 10"
+    },
+    {
+      "target": "(n5 -> n9)[0]",
+      "kind": "edge",
+      "group": "Group 10"
+    },
+    {
+      "target": "n10",
+      "kind": "node",
+      "group": "Group 11"
+    },
+    {
+      "target": "(n6 -> n10)[0]",
+      "kind": "edge",
+      "group": "Group 11"
+    },
+    {
+      "target": "n11",
+      "kind": "node",
+      "group": "Group 12"
+    },
+    {
+      "target": "(n7 -> n11)[0]",
+      "kind": "edge",
+      "group": "Group 12"
+    },
+    {
+      "target": "n12",
+      "kind": "node",
+      "group": "Group 13"
+    },
+    {
+      "target": "(n8 -> n12)[0]",
+      "kind": "edge",
+      "group": "Group 13"
+    },
+    {
+      "target": "n13",
+      "kind": "node",
+      "group": "Group 14"
+    },
+    {
+      "target": "(n9 -> n13)[0]",
+      "kind": "edge",
+      "group": "Group 14"
+    },
+    {
+      "target": "n14",
+      "kind": "node",
+      "group": "Group 15"
+    },
+    {
+      "target": "(n10 -> n14)[0]",
+      "kind": "edge",
+      "group": "Group 15"
+    },
+    {
+      "target": "n15",
+      "kind": "node",
+      "group": "Group 16"
+    },
+    {
+      "target": "(n11 -> n15)[0]",
+      "kind": "edge",
+      "group": "Group 16"
+    },
+    {
+      "target": "n16",
+      "kind": "node",
+      "group": "Group 17"
+    },
+    {
+      "target": "(n12 -> n16)[0]",
+      "kind": "edge",
+      "group": "Group 17"
+    },
+    {
+      "target": "n17",
+      "kind": "node",
+      "group": "Group 18"
+    },
+    {
+      "target": "(n13 -> n17)[0]",
+      "kind": "edge",
+      "group": "Group 18"
+    },
+    {
+      "target": "n18",
+      "kind": "node",
+      "group": "Group 19"
+    },
+    {
+      "target": "(n14 -> n18)[0]",
+      "kind": "edge",
+      "group": "Group 19"
+    },
+    {
+      "target": "n19",
+      "kind": "node",
+      "group": "Group 20"
+    },
+    {
+      "target": "(n15 -> n19)[0]",
+      "kind": "edge",
+      "group": "Group 20"
+    }
+  ]
+}

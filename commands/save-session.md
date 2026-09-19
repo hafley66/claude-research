@@ -13,13 +13,7 @@ Summarize the conversation into a session file.
 1. If `$ARGUMENTS` is empty, infer a kebab-case topic from the conversation (e.g. `hafley-alloy-rust-layers-0-1`)
   - if its just yolo'd into the middle of stuff, then just read this and figure it out.
 2. Summarize the conversation, then pipe it into `hafley-chat-save <topic>`:
-3. If i say "no user message ledger" (or "no ledger"), drop the
-   `## Turn-by-turn Attribution Summary` section entirely. Everything else stays.
-4. If i say "thorough", the Key Insights section carries the mechanism, not the
-   headline: file paths with line numbers, the actual field names, the rule that
-   generalizes, and any finding that cost a review round to reach. A session
-   another instance can resume without re-deriving.
-5. If i ask you to zoom 3, it means i want you to run zoom logic:
+3. If i ask you to zoom 3, it means i want you to run zoom logic:
 ```
 ### Level 3
 
